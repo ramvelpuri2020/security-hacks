@@ -68,7 +68,7 @@ export const scan_repo = task(
     if (typeof repoUrl !== 'string' || !repoUrl.trim()) {
       throw new Error('scan_repo requires a repo URL string as input, e.g. ["https://github.com/owner/repo"]');
     }
-    const { stdout } = await runRunner(repoUrl);
+    const stdout = await runRunner(repoUrl);
     const m = stdout.match(/REPORT_START\n([\s\S]*?)\nREPORT_END/);
     if (!m) throw new Error('workflow-run.js finished without producing a report');
     return JSON.parse(m[1]);
