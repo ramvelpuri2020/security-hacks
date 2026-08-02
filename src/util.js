@@ -4,12 +4,15 @@ import path from 'node:path';
 /** File extensions we actually scan. Everything else (binaries, images, etc.) is skipped. */
 export const SOURCE_EXTENSIONS = new Set([
   '.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx',
-  '.py', '.rb', '.php', '.go', '.java', '.c', '.h', '.cpp', '.hpp', '.cs',
+  '.py', '.rb', '.php', '.go', '.java', '.kt', '.kts', '.c', '.h', '.cpp', '.hpp', '.cs',
   '.sh', '.bash', '.zsh', '.ps1',
   '.json', '.yaml', '.yml', '.toml', '.xml', '.ini', '.cfg', '.conf', '.properties',
   '.html', '.htm', '.vue', '.sql', '.env', '.txt', '.md',
-  '.gradle', '.lock',
+  '.gradle', '.mod',
 ]);
+
+/** Extensionless manifest files we still want to scan (e.g. Ruby Gemfile). */
+export const NAMED_SOURCE_FILES = new Set(['Gemfile']);
 
 /** Directories that never contain app source worth scanning. */
 export const SKIP_DIRS = new Set([
@@ -28,7 +31,10 @@ export function isSkippedDir(name) {
 
 export function isSourceFile(name) {
   const ext = path.extname(name).toLowerCase();
-  if (!SOURCE_EXTENSIONS.has(ext)) return false;
+  if (!SOURCE_EXTENSIONS.has(ext)) {
+    // Extensionless manifests (Gemfile) are worth scanning.
+    return NAMED_SOURCE_FILES.has(name);
+  }
   // Lockfiles are huge and not interesting for secret/injection scanning.
   if (name === 'package-lock.json' || name === 'yarn.lock' || name === 'pnpm-lock.yaml') return false;
   return true;
