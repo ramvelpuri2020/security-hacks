@@ -23,10 +23,13 @@ export function PipelineDisplay({
     { id: 'patches', label: 'Generating patches...', status: 'pending' },
   ])
   const [error, setError] = useState('')
+  const [llmFallback, setLlmFallback] = useState('')
+  const [stalled, setStalled] = useState(false)
 
   const findingsRef = useRef<any[]>([])
   const cveCountRef = useRef(0)
   const doneRef = useRef(false)
+  const lastEventRef = useRef(Date.now())
 
   const setStage = (
     id: string,
@@ -45,14 +48,32 @@ export function PipelineDisplay({
     findingsRef.current = []
     cveCountRef.current = 0
     doneRef.current = false
+    lastEventRef.current = Date.now()
     setError('')
+    setLlmFallback('')
+    setStalled(false)
+
+    // If no SSE events arrive for a while (e.g. LLM endpoint hanging), show a
+    // nudge so the user knows the scan is still running rather than frozen.
+    const stallTimer = setInterval(() => {
+      if (doneRef.current) return
+      if (Date.now() - lastEventRef.current > 45000) {
+        setStalled(true)
+      }
+    }, 5000)
 
     const es = new EventSource(
       `${API_BASE}/api/scan?url=${encodeURIComponent(repoUrl)}`
     )
 
+    const markEvent = () => {
+      lastEventRef.current = Date.now()
+      setStalled(false)
+    }
+
     es.addEventListener('step', (event) => {
       const data = JSON.parse((event as MessageEvent).data)
+      markEvent()
       if (data.step === 'clone') setStage('clone', { status: 'running' })
       else if (data.step === 'scan') {
         setStage('clone', { status: 'complete' })
@@ -79,6 +100,7 @@ export function PipelineDisplay({
 
     es.addEventListener('scan', (event) => {
       const data = JSON.parse((event as MessageEvent).data)
+      markEvent()
       setStage('secrets', {
         status: 'complete',
         result: `found ${data.secrets} secret${data.secrets === 1 ? '' : 's'}`,
@@ -100,6 +122,7 @@ export function PipelineDisplay({
 
     es.addEventListener('cve', (event) => {
       const data = JSON.parse((event as MessageEvent).data)
+      markEvent()
       if (data.status === 'ok' && Array.isArray(data.cves)) {
         cveCountRef.current += data.cves.length
       } else if (data.status === 'skipped') {
@@ -116,15 +139,21 @@ export function PipelineDisplay({
 
     es.addEventListener('patch', (event) => {
       const data = JSON.parse((event as MessageEvent).data)
+      markEvent()
       setStage('patches', {
         status: 'running',
-        result: `generating ${data.index + 1}/${data.total}...`,
+        result: `generated ${data.done ?? data.index + 1}/${data.total}`,
       })
+      if (data.llmError) {
+        setLlmFallback(String(data.llmError))
+      }
     })
 
     es.addEventListener('done', (event) => {
       const data = JSON.parse((event as MessageEvent).data)
+      markEvent()
       doneRef.current = true
+      setStalled(false)
       const count = findingsRef.current.length
       setStage('patches', {
         status: 'complete',
@@ -137,6 +166,7 @@ export function PipelineDisplay({
 
     es.addEventListener('error', (event) => {
       const data = JSON.parse((event as MessageEvent).data)
+      markEvent()
       doneRef.current = true
       setError(data.message || 'Scan failed')
       es.close()
@@ -150,7 +180,10 @@ export function PipelineDisplay({
       es.close()
     }
 
-    return () => es.close()
+    return () => {
+      clearInterval(stallTimer)
+      es.close()
+    }
   }, [repoUrl, onComplete])
 
   return (
@@ -174,6 +207,14 @@ export function PipelineDisplay({
           <div className="text-center space-y-2 pt-4">
             {error ? (
               <p className="text-sm text-red-400 font-mono">{error}</p>
+            ) : stalled ? (
+              <p className="text-sm text-yellow-400 font-mono">
+                Still running — the scan service may be slow. Hang tight...
+              </p>
+            ) : llmFallback ? (
+              <p className="text-xs text-yellow-400/80 font-mono">
+                AI patch service unavailable ({llmFallback}) — showing suggested fixes
+              </p>
             ) : (
               <p className="text-xs text-muted-foreground">Running multi-stage security analysis...</p>
             )}

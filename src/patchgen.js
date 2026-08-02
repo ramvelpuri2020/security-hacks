@@ -97,8 +97,10 @@ export async function generatePatch(finding, llm = {}, signal) {
     2
   );
 
+  // Short timeout so a hanging/unreachable LLM endpoint fails fast (per-finding)
+  // instead of stalling the whole scan for minutes.
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30000);
+  const timer = setTimeout(() => controller.abort(), 12000);
   // Link the pipeline's abort signal (client disconnect) to this request.
   const fetchSignal = signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
   try {

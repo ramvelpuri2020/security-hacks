@@ -215,22 +215,37 @@ export async function runPipeline({
         : `Generating suggested fixes for ${findings.length} finding${findings.length === 1 ? '' : 's'} (deterministic mode — set LLM_API_KEY or DASHSCOPE_API_KEY for AI patches)`,
     });
 
-    for (let i = 0; i < findings.length; i++) {
-      throwIfAborted(signal);
-      const finding = findings[i];
-      const patch = await generatePatch(finding, llm, signal);
-      finding.patch = patch.patch;
-      finding.explanation = patch.explanation;
-      if (patch.llmError) finding.llmError = patch.llmError;
-      emit('patch', {
-        findingId: finding.id,
-        index: i,
-        total: findings.length,
-        patch: patch.patch,
-        explanation: patch.explanation,
-        llmError: patch.llmError || null,
-      });
-    }
+    // Generate patches with a small concurrency pool. Sequential generation
+    // would stall the whole scan for minutes if the LLM endpoint is slow or
+    // hanging (27 findings x 12s timeout). A pool of 4 keeps it responsive.
+    const PATCH_POOL = 4;
+    let nextIndex = 0;
+    let emitted = 0;
+    const worker = async () => {
+      while (true) {
+        throwIfAborted(signal);
+        const i = nextIndex++;
+        if (i >= findings.length) break;
+        const finding = findings[i];
+        const patch = await generatePatch(finding, llm, signal);
+        finding.patch = patch.patch;
+        finding.explanation = patch.explanation;
+        if (patch.llmError) finding.llmError = patch.llmError;
+        emitted++;
+        emit('patch', {
+          findingId: finding.id,
+          index: i,
+          total: findings.length,
+          done: emitted,
+          patch: patch.patch,
+          explanation: patch.explanation,
+          llmError: patch.llmError || null,
+        });
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(PATCH_POOL, findings.length) }, () => worker())
+    );
 
     // ---------- 5. ASSEMBLE ----------
     const bySeverity = {};
