@@ -14,7 +14,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { extractJson } from './patchgen.js';
+import { extractJson, normalizeBaseUrl } from './patchgen.js';
 
 /** Max source characters sent to the LLM per analysis call (~100k tokens budget, kept safe). */
 const MAX_ANALYSIS_CHARS = 90_000;
@@ -77,10 +77,13 @@ const SEVERITIES = new Set(['critical', 'high', 'medium', 'low']);
 export async function analyzeWithLLM(files, llm = {}, { signal, log = () => {} } = {}) {
   const {
     apiKey,
-    baseUrl = 'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
+    baseUrl: rawBaseUrl,
     model = 'qwen-plus',
     timeoutMs = 60000,
   } = llm;
+  // Self-heal malformed LLM_BASE_URL (DashScope native /api/v1 path or
+  // trailing cruft like " model=qwen3.6-flash" pasted after the URL).
+  const baseUrl = normalizeBaseUrl(rawBaseUrl) || 'https://dashscope-us.aliyuncs.com/compatible-mode/v1';
   // Return shape: { findings, failed } — `failed: true` means the LLM call
   // itself errored/timed out (NOT "nothing found"), so callers can report
   // the difference honestly instead of conflating a failure with a clean scan.

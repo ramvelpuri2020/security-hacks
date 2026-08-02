@@ -68,10 +68,15 @@ function parseRequirementsFile(filePath, deps) {
     if (!line) continue;
     if (line.startsWith('-') || line.startsWith('--')) continue; // -r, -e, --index-url etc.
     if (line.includes('://')) continue; // VCS / direct URL deps — skip
-    // Split on the first version operator
-    const m = line.match(/^([A-Za-z0-9_.\-]+)\s*(?:===|==|>=|<=|~=|!=|>|<)\s*(.+)$/);
+    // Split on the first version operator. Allow Python "extras" syntax
+    // (package[extra]==version) — the extras are a feature flag, not part of
+    // the package name, and without this the whole line is silently skipped.
+    const m = line.match(
+      /^([A-Za-z0-9_.\-]+(?:\[[A-Za-z0-9_,.\-]+\])?)\s*(?:===|==|>=|<=|~=|!=|>|<)\s*(.+)$/
+    );
     if (m) {
-      pushDep(deps, m[1], m[2], 'pypi', path.basename(filePath), null);
+      const name = m[1].replace(/\[[^\]]*\]/g, '');
+      pushDep(deps, name, m[2], 'pypi', path.basename(filePath), null);
     }
   }
 }

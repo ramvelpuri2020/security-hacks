@@ -6,6 +6,26 @@
  *    finding itself, so the pipeline still works end-to-end without keys.
  */
 
+/**
+ * Sanitize a configured LLM base URL. Two common real-world mistakes that
+ * otherwise 404 every request:
+ *  1. Cruft pasted after the URL (e.g. ".../api/v1 model=qwen3.6-flash")
+ *     — keep only the part before the first whitespace.
+ *  2. The DashScope NATIVE endpoint /api/v1 instead of the OpenAI-compatible
+ *     /compatible-mode/v1 our client always speaks. Rewrite it ONLY for
+ *     Alibaba MaaS hosts (ws-*.maas.aliyuncs.com) — providers like OpenRouter
+ *     legitimately serve OpenAI-compatible APIs at /api/v1 and must be left
+ *     untouched.
+ */
+export function normalizeBaseUrl(url) {
+  if (!url) return undefined;
+  let clean = String(url).trim().split(/\s+/)[0];
+  if (/maas\.aliyuncs\.com/i.test(clean) && /\/api\/v1\/?$/.test(clean)) {
+    clean = clean.replace(/\/api\/v1\/?$/, '/compatible-mode/v1');
+  }
+  return clean;
+}
+
 /** Strip ```json fences / markdown from a raw LLM response to get pure JSON. */
 export function extractJson(raw) {
   if (!raw) return null;
@@ -70,11 +90,13 @@ export function deterministicPatch(finding) {
 export async function generatePatch(finding, llm = {}, signal) {
   const {
     apiKey,
-    baseUrl = 'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
+    baseUrl: rawBaseUrl,
     model = 'qwen-plus',
     timeoutMs = 15000,
   } = llm;
   if (!apiKey) return deterministicPatch(finding);
+  // Self-heal malformed LLM_BASE_URL (native /api/v1 path or trailing cruft).
+  const baseUrl = normalizeBaseUrl(rawBaseUrl) || 'https://dashscope-us.aliyuncs.com/compatible-mode/v1';
 
   const system = [
     'You are a senior application security engineer. You receive a static-analysis finding',
