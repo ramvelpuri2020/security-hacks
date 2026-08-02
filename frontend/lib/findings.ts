@@ -30,3 +30,21 @@ export function toFinding(raw: any): Finding {
     cveUrl: raw.cveUrl,
   }
 }
+
+// Dependency extracted from a repo manifest (package.json / requirements.txt).
+export type Dependency = {
+  name: string
+  version: string
+  ecosystem: string
+  source?: string
+  section?: string
+  range?: string
+}
+
+// One dependency's live CVE research result (from the `cve` events / report).
+export type CveResult = {
+  dep: Dependency
+  status: 'ok' | 'skipped' | 'none' | 'error' | string
+  cves?: string[]
+  error?: string
+}

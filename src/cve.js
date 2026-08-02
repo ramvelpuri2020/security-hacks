@@ -44,8 +44,29 @@ export async function lookupDepCVE(dep, apiKey, { timeoutMs = 15000, signal } = 
       url: r.url,
       content: (r.content || '').slice(0, 500),
     }));
+    // Relevance filter: only count CVEs from results that actually mention the
+    // package name. Without this, Tavily surfaces unrelated CVEs (e.g. the C
+    // product "Mongoose Web Server" for the npm `mongoose` package, or a
+    // PayPal XSS CVE for `express`), which look like false positives on a demo.
+    //
+    // Drop cross-product reference-dump pages first — cve.org resource maps,
+    // NVD XML feed exports, and old BUGTRAQ/FULLDISC archives list CVEs for
+    // MANY products in one page, so a single "Mongoose Web Server" mention
+    // would drag in a dozen unrelated CVEs.
+    const dumpUrl = /cve\.org\/Resources|feeds\/xml|refmap|source-(?:BUGTRAQ|FULLDISC)/i;
+    const depName = (dep.name || '').toLowerCase();
+    // Drop cross-product dump pages up front, then keep only name-matching
+    // results. Fall back to the non-dump set (NOT raw results) if nothing
+    // matches the name, so a package whose only hits are stub/refmap pages
+    // shows no CVEs instead of the full unrelated dump.
+    const nonDump = results.filter((r) => !dumpUrl.test(r.url || ''));
+    const relevant = nonDump.filter((r) =>
+      `${r.title} ${r.url} ${r.content}`.toLowerCase().includes(depName)
+    );
     const cves = extractCveIds(
-      results.map((r) => `${r.title} ${r.url} ${r.content}`).join(' ')
+      (relevant.length ? relevant : nonDump)
+        .map((r) => `${r.title} ${r.url} ${r.content}`)
+        .join(' ')
     );
     return { dep, status: 'ok', cves, results };
   } catch (err) {

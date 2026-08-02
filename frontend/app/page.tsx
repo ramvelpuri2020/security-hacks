@@ -7,7 +7,7 @@ import { PipelineDisplay, type ScanMeta } from '@/components/pipeline-display'
 import { ResultsScreen } from '@/components/results-screen'
 import { WorkflowDisplay } from '@/components/workflow-display'
 import { API_BASE } from '@/lib/api'
-import { toFinding, type Finding } from '@/lib/findings'
+import { toFinding, type CveResult, type Dependency, type Finding } from '@/lib/findings'
 
 type Screen = 'home' | 'input' | 'pipeline' | 'workflow' | 'results'
 
@@ -24,6 +24,8 @@ export default function Page() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home')
   const [repoUrl, setRepoUrl] = useState('')
   const [findings, setFindings] = useState<Finding[]>([])
+  const [cves, setCves] = useState<CveResult[]>([])
+  const [dependencies, setDependencies] = useState<Dependency[]>([])
   const [viewingScan, setViewingScan] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
 
@@ -31,6 +33,8 @@ export default function Page() {
     setCurrentScreen('input')
     setRepoUrl('')
     setFindings([])
+    setCves([])
+    setDependencies([])
     setViewingScan(false)
     setWarning(null)
   }
@@ -42,6 +46,8 @@ export default function Page() {
 
   const handlePipelineComplete = (results: Finding[], meta?: ScanMeta) => {
     setFindings(results)
+    setCves(meta?.cves || [])
+    setDependencies(meta?.dependencies || [])
     setWarning(warningFromMeta(meta))
     setViewingScan(false) // a fresh scan is not an archived re-open
     setCurrentScreen('results')
@@ -55,6 +61,8 @@ export default function Page() {
       const scan = data.scan
       if (!scan) return
       setFindings((scan.findings || []).map(toFinding))
+      setCves(Array.isArray(scan.cves) ? scan.cves : [])
+      setDependencies(Array.isArray(scan.dependencies) ? scan.dependencies : [])
       setRepoUrl(scan.meta?.repo || '')
       setWarning(warningFromMeta(scan.meta))
       setViewingScan(true)
@@ -69,6 +77,8 @@ export default function Page() {
     setCurrentScreen('home')
     setRepoUrl('')
     setFindings([])
+    setCves([])
+    setDependencies([])
     setViewingScan(false)
     setWarning(null)
   }
@@ -84,6 +94,8 @@ export default function Page() {
       {currentScreen === 'results' && (
         <ResultsScreen
           findings={findings}
+          cves={cves}
+          dependencies={dependencies}
           onBackToHome={handleBackToHome}
           archived={viewingScan}
           warning={warning}

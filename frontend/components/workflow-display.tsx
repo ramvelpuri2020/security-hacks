@@ -71,6 +71,8 @@ export function WorkflowDisplay({ repoUrl, onComplete, onBack }: WorkflowDisplay
           onCompleteRef.current(findings.map(toFinding), {
             truncated: Boolean(results?.meta?.truncated),
             truncatedMessage: results?.meta?.truncatedMessage || null,
+            cves: Array.isArray(results?.cves) ? results.cves : undefined,
+            dependencies: Array.isArray(results?.dependencies) ? results.dependencies : undefined,
           })
           return
         }

@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { PipelineStepper, type PipelineStage } from './pipeline-stepper'
 import { API_BASE } from '@/lib/api'
-import { toFinding, type Finding } from '@/lib/findings'
+import { toFinding, type CveResult, type Dependency, type Finding } from '@/lib/findings'
 
 export interface ScanMeta {
   truncated?: boolean
   truncatedMessage?: string | null
+  cves?: CveResult[]
+  dependencies?: Dependency[]
 }
 
 interface PipelineDisplayProps {
@@ -186,6 +188,8 @@ export function PipelineDisplay({
       onComplete(results.map(toFinding), {
         truncated: truncatedRef.current,
         truncatedMessage: truncatedMessageRef.current || null,
+        cves: Array.isArray(data.results?.cves) ? data.results.cves : undefined,
+        dependencies: Array.isArray(data.results?.dependencies) ? data.results.dependencies : undefined,
       })
       es.close()
     })

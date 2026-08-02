@@ -4,11 +4,13 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { ChevronDown, ChevronUp, AlertTriangle, AlertCircle, AlertOctagon, ExternalLink, ArrowLeft } from 'lucide-react'
-import type { Finding } from '@/lib/findings'
+import { ChevronDown, ChevronUp, AlertTriangle, AlertCircle, AlertOctagon, ExternalLink, ArrowLeft, Package } from 'lucide-react'
+import type { CveResult, Dependency, Finding } from '@/lib/findings'
 
 interface ResultsScreenProps {
   findings: Finding[]
+  cves?: CveResult[]
+  dependencies?: Dependency[]
   onBackToHome: () => void
   archived?: boolean
   warning?: string | null
@@ -117,6 +119,8 @@ function FindingCard({ finding }: { finding: Finding }) {
 
 export function ResultsScreen({
   findings,
+  cves = [],
+  dependencies = [],
   onBackToHome,
   archived = false,
   warning = null,
@@ -130,6 +134,18 @@ export function ResultsScreen({
     const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 }
     return severityOrder[a.severity] - severityOrder[b.severity]
   })
+
+  // Group live CVE research by dependency name so the section below can
+  // show each dep with its matched CVE badges (links out to NVD).
+  const cvesByDep = new Map<string, CveResult>()
+  for (const c of cves) {
+    const key = c.dep?.name
+    if (key && !cvesByDep.has(key)) cvesByDep.set(key, c)
+  }
+  const matchedCveCount = cves.reduce(
+    (acc, c) => acc + (Array.isArray(c.cves) ? c.cves.length : 0),
+    0
+  )
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-black to-neutral-900/50 px-4 md:px-8 py-8 md:py-12">
@@ -177,31 +193,93 @@ export function ResultsScreen({
               </Card>
             ))}
           </div>
-        </div>
+        </div>          {/* Findings list */}
+          <div className="space-y-3">
+            {sortedFindings.length > 0 ? (
+              sortedFindings.map((finding, index) => (
+                <div
+                  key={finding.id}
+                  className="fade-in-up"
+                  style={{
+                    animationDelay: `${index * 50}ms`,
+                  }}
+                >
+                  <FindingCard finding={finding} />
+                </div>
+              ))
+            ) : matchedCveCount > 0 ? (
+              <Card className="glass-card border-amber-500/20 bg-amber-500/5">
+                <CardContent className="p-12 text-center">
+                  <p className="text-amber-400 font-semibold text-lg">⚠ No code-level issues found</p>
+                  <p className="text-muted-foreground text-sm mt-2">
+                    Review the dependency CVEs below — known-vulnerable packages were detected.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="glass-card border-green-500/20 bg-green-500/5">
+                <CardContent className="p-12 text-center">
+                  <p className="text-green-400 font-semibold text-lg">✓ No vulnerabilities found</p>
+                  <p className="text-muted-foreground text-sm mt-2">This repository passed all security checks</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
 
-        {/* Findings list */}
-        <div className="space-y-3">
-          {sortedFindings.length > 0 ? (
-            sortedFindings.map((finding, index) => (
-              <div
-                key={finding.id}
-                className="fade-in-up"
-                style={{
-                  animationDelay: `${index * 50}ms`,
-                }}
-              >
-                <FindingCard finding={finding} />
+          {/* Dependencies & live CVE research */}
+          {dependencies.length > 0 && (
+            <div className="space-y-3 pt-4">
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-primary" />
+                <h2 className="text-xl font-semibold tracking-tight">Dependencies &amp; CVE Research</h2>
               </div>
-            ))
-          ) : (
-            <Card className="glass-card border-green-500/20 bg-green-500/5">
-              <CardContent className="p-12 text-center">
-                <p className="text-green-400 font-semibold text-lg">✓ No vulnerabilities found</p>
-                <p className="text-muted-foreground text-sm mt-2">This repository passed all security checks</p>
-              </CardContent>
-            </Card>
+              <p className="text-sm text-muted-foreground">
+                {dependencies.length} pinned dependenc{dependencies.length === 1 ? 'y' : 'ies'}
+                {matchedCveCount > 0 && (
+                  <> — {matchedCveCount} known CVE{matchedCveCount === 1 ? '' : 's'} matched via live Tavily research</>
+                )}
+              </p>
+              <div className="space-y-2">
+                {dependencies.map((dep) => {
+                  const cve = cvesByDep.get(dep.name)
+                  const depCves = cve?.status === 'ok' ? cve.cves || [] : []
+                  return (
+                    <Card key={`${dep.ecosystem}:${dep.name}`} className="glass-card border-white/8">
+                      <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
+                        <div className="min-w-0">
+                          <p className="font-mono text-sm font-medium text-foreground">{dep.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            v{dep.version} · {dep.ecosystem}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {depCves.length === 0 ? (
+                            <span className="text-xs text-muted-foreground/70">no CVEs matched</span>
+                          ) : (
+                            depCves.slice(0, 6).map((cveId) => (
+                              <a
+                                key={cveId}
+                                href={`https://nvd.nist.gov/vuln/detail/${cveId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-mono hover:bg-red-500/20 transition-colors"
+                              >
+                                {cveId}
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            ))
+                          )}
+                          {depCves.length > 6 && (
+                            <span className="text-xs text-muted-foreground">+{depCves.length - 6} more</span>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            </div>
           )}
-        </div>
 
         {/* Footer */}
         <div className="py-8 border-t border-white/8 text-center text-xs text-muted-foreground">

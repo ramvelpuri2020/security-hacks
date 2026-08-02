@@ -155,6 +155,28 @@ const SECRET_PATTERNS = [
     fix: 'Load the secret from an environment variable or secrets manager, and rotate it if it has ever been committed.',
   },
   {
+    id: 'hardcoded_crypto_key',
+    label: 'Hardcoded encryption key',
+    severity: 'high',
+    confidence: 'medium',
+    regex: /\b(?:const|let|var)\s+\w+\s*=\s*['"][0-9a-fA-F]{32}(?:[0-9a-fA-F]{32})?['"]\s*;?/g,
+    envVar: 'ENCRYPTION_KEY',
+    description:
+      'A 32/64-character hex string is hardcoded as a constant — the typical shape of an AES key or crypto secret. Anyone with repo access can decrypt data or forge tokens.',
+    fix: 'Load the key from an environment variable or secrets manager, and rotate it if it has ever been committed.',
+  },
+  {
+    id: 'hardcoded_crypto_iv',
+    label: 'Hardcoded crypto IV',
+    severity: 'medium',
+    confidence: 'high',
+    regex: /Buffer\.from\(\s*['"][0-9a-fA-F]{32}['"]\s*,\s*['"]hex['"]\s*\)/g,
+    envVar: 'CRYPTO_IV',
+    description:
+      'A fixed 16-byte initialization vector is hardcoded via Buffer.from(..., "hex"). Reusing a static IV weakens encryption and enables ciphertext replay.',
+    fix: 'Generate a fresh random IV per encryption operation instead of hardcoding one.',
+  },
+  {
     id: 'hardcoded_credential',
     label: 'Possible hardcoded credential',
     severity: 'medium',

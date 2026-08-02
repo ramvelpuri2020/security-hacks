@@ -28,6 +28,39 @@ const INJECTION_PATTERNS = [
     fix: 'Use parameterized queries. Never interpolate values directly into a SQL string.',
   },
   {
+    id: 'nosql_req_object',
+    label: 'NoSQL query built from raw request object',
+    severity: 'high',
+    confidence: 'high',
+    regex:
+      /\.(?:find|findOne|findById|findByIdAndUpdate|findByIdAndDelete|updateOne|updateMany|deleteOne|deleteMany)\s*\(\s*(?:req|request)\.(?:body|query|params)\b/g,
+    description:
+      'The HTTP request object (req.body/req.query/req.params) is passed straight into a NoSQL database query as the filter. Attackers can craft values (e.g. {"$ne": null}) to bypass filters and read/modify any record — classic NoSQL injection.',
+    fix: 'Never pass request data directly into queries. Validate and map each field to an allowlist, and strip keys starting with $ before querying.',
+  },
+  {
+    id: 'nosql_operator_injection',
+    label: 'NoSQL operator injection in query',
+    severity: 'high',
+    confidence: 'medium',
+    regex:
+      /\.(?:find|findOne|findById|findByIdAndUpdate|updateOne|updateMany|deleteOne|deleteMany)\s*\(\s*\{[^}]{0,300}?\$(?:ne|gt|gte|lt|lte|in|nin|exists|regex|where)\b/g,
+    description:
+      'A NoSQL query filter contains comparison operators ($ne, $gt, $in, …). If any part of the filter derives from user input, an attacker can inject operators to bypass authentication or authorization checks.',
+    fix: 'Validate the query filter against an allowlist and strip keys beginning with $ before building the query.',
+  },
+  {
+    id: 'nosql_identifier_filter',
+    label: 'NoSQL query built from variable values',
+    severity: 'medium',
+    confidence: 'low',
+    regex:
+      /\.(?:find|findOne|findById)\s*\(\s*\{\s*[A-Za-z_$][\w$]*\s*:\s*[A-Za-z_$][\w$]*(?:\s*,\s*[A-Za-z_$][\w$]*\s*:\s*[A-Za-z_$][\w$]*){1,4}\s*\}/g,
+    description:
+      'A NoSQL query object is assembled from variable values (identifier: identifier pairs). If those variables originate from request input (e.g. destructured req.body), this is a NoSQL injection vector.',
+    fix: 'Validate request fields against an allowlist before using them in queries, and prefer explicit, sanitized query objects.',
+  },
+  {
     id: 'eval',
     label: 'eval() usage',
     severity: 'high',
