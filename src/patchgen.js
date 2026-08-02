@@ -110,6 +110,7 @@ export async function generatePatch(finding, llm = {}, signal) {
   // Link the pipeline's abort signal (client disconnect) to this request.
   const fetchSignal = signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
   try {
+    console.error(`[LLM] requesting ${baseUrl}/chat/completions model=${model} timeoutMs=${timeoutMs}`);
     const res = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
       signal: fetchSignal,
@@ -127,12 +128,15 @@ export async function generatePatch(finding, llm = {}, signal) {
       }),
     });
     if (!res.ok) {
+      const bodyText = await res.text().catch(() => '');
+      console.error(`[LLM] HTTP ${res.status} from ${baseUrl} model=${model} — body: ${bodyText.slice(0, 500)}`);
       return { ...deterministicPatch(finding), llmError: `HTTP ${res.status}` };
     }
     const data = await res.json();
     const content = data?.choices?.[0]?.message?.content;
     const parsed = extractJson(content);
     if (!parsed || !parsed.patch) {
+      console.error(`[LLM] unparseable response from ${baseUrl} model=${model} — raw content: ${String(content).slice(0, 500)}`);
       return { ...deterministicPatch(finding), llmError: 'unparseable response' };
     }
     return {
@@ -141,6 +145,7 @@ export async function generatePatch(finding, llm = {}, signal) {
     };
   } catch (err) {
     const timedOut = err && err.name === 'AbortError' && !signal?.aborted;
+    console.error(`[LLM] request failed — baseUrl: ${baseUrl}, model: ${model}, timeoutMs: ${timeoutMs}, error: ${String(err && err.message || err)}`);
     return {
       ...deterministicPatch(finding),
       llmError: timedOut
