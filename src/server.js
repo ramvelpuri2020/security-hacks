@@ -179,7 +179,9 @@ app.post('/api/scan/workflow', async (req, res) => {
       method: 'POST',
       body: JSON.stringify({ task: RENDER_WORKFLOW_TASK, input: [url.trim()] }),
     });
-    if (status !== 201 && status !== 200) {
+    // Render returns 202 Accepted when the run is enqueued (body contains the
+    // full TaskRun object). Accept any 2xx — NOT just 200/201.
+    if (status < 200 || status >= 300) {
       return res.status(502).json({ error: `Render API ${status}: ${JSON.stringify(body).slice(0, 300)}` });
     }
     const taskRunId = body.taskRunId || body.id;
@@ -205,7 +207,7 @@ app.get('/api/scan/workflow/:taskRunId', async (req, res) => {
   }
   try {
     const { status, body } = await renderApi(`/task-runs/${req.params.taskRunId}`);
-    if (status !== 200) {
+    if (status < 200 || status >= 300) {
       return res.status(502).json({ error: `Render API ${status}: ${JSON.stringify(body).slice(0, 300)}` });
     }
     const results = Array.isArray(body.results) ? body.results[0] : null;
