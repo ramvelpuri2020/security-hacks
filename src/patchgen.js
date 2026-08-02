@@ -68,7 +68,12 @@ export function deterministicPatch(finding) {
  * `llm` = { apiKey, baseUrl, model } — if apiKey is missing, uses deterministicPatch.
  */
 export async function generatePatch(finding, llm = {}, signal) {
-  const { apiKey, baseUrl = 'https://dashscope-us.aliyuncs.com/compatible-mode/v1', model = 'qwen-plus' } = llm;
+  const {
+    apiKey,
+    baseUrl = 'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
+    model = 'qwen-plus',
+    timeoutMs = 15000,
+  } = llm;
   if (!apiKey) return deterministicPatch(finding);
 
   const system = [
@@ -98,9 +103,10 @@ export async function generatePatch(finding, llm = {}, signal) {
   );
 
   // Short timeout so a hanging/unreachable LLM endpoint fails fast (per-finding)
-  // instead of stalling the whole scan for minutes.
+  // instead of stalling the whole scan for minutes. Configurable via
+  // LLM_TIMEOUT_MS (e.g. thinking models can be slow per response).
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   // Link the pipeline's abort signal (client disconnect) to this request.
   const fetchSignal = signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
   try {
@@ -137,7 +143,9 @@ export async function generatePatch(finding, llm = {}, signal) {
     const timedOut = err && err.name === 'AbortError' && !signal?.aborted;
     return {
       ...deterministicPatch(finding),
-      llmError: timedOut ? 'LLM request timed out' : String(err && err.message || err),
+      llmError: timedOut
+        ? `LLM request timed out after ${timeoutMs / 1000}s for model ${model}`
+        : String(err && err.message || err),
     };
   } finally {
     clearTimeout(timer);

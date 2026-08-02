@@ -207,6 +207,9 @@ export async function runPipeline({
       // undefined (not '') so generatePatch's defaults apply when unset/empty.
       baseUrl: env.LLM_BASE_URL || undefined,
       model: env.LLM_MODEL || undefined,
+      // Per-call timeout — some models (e.g. thinking models like qwen3.6-flash)
+      // can take a while per response. Default 15s; bump via LLM_TIMEOUT_MS.
+      timeoutMs: Number(env.LLM_TIMEOUT_MS) || 15000,
     };
     emit('step', {
       step: 'patch',
