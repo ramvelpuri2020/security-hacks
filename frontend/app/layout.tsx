@@ -31,8 +31,11 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark bg-black">
-      <body className={`${inter.className} antialiased bg-black text-foreground`} style={{ '--font-mono': jetbrainsMono.style.fontFamily } as React.CSSProperties}>
+    // suppressHydrationWarning: browser extensions (e.g. session recorders) inject
+    // attributes like `bis_register` onto <html>/<body> before React hydrates,
+    // which triggers a hydration mismatch warning. This is safe to suppress.
+    <html lang="en" className="dark bg-black" suppressHydrationWarning>
+      <body className={`${inter.className} antialiased bg-black text-foreground`} style={{ '--font-mono': jetbrainsMono.style.fontFamily } as React.CSSProperties} suppressHydrationWarning>
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

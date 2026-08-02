@@ -2,28 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { PipelineStepper, type PipelineStage } from './pipeline-stepper'
-import type { Finding } from './results-screen'
 import { API_BASE } from '@/lib/api'
+import { toFinding, type Finding } from '@/lib/findings'
 
 interface PipelineDisplayProps {
   repoUrl: string
   onComplete: (findings: Finding[]) => void
-}
-
-// Map a backend finding to the Finding type used by the results screen.
-function toFinding(raw: any): Finding {
-  return {
-    id: String(raw.id),
-    severity: raw.severity,
-    file: raw.file,
-    line: raw.line,
-    title: raw.label,
-    description: raw.explanation || raw.description,
-    vulnerable: raw.code,
-    patch: raw.patch || '',
-    cveId: raw.cveId,
-    cveUrl: raw.cveUrl,
-  }
 }
 
 export function PipelineDisplay({

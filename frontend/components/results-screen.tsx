@@ -5,23 +5,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { ChevronDown, ChevronUp, AlertTriangle, AlertCircle, AlertOctagon, ExternalLink, ArrowLeft } from 'lucide-react'
-
-export type Finding = {
-  id: string
-  severity: 'critical' | 'high' | 'medium' | 'low'
-  file: string
-  line: number
-  title: string
-  description: string
-  vulnerable: string
-  patch: string
-  cveId?: string
-  cveUrl?: string
-}
+import type { Finding } from '@/lib/findings'
 
 interface ResultsScreenProps {
   findings: Finding[]
   onBackToHome: () => void
+  archived?: boolean
 }
 
 const severityConfig = {
@@ -128,6 +117,7 @@ function FindingCard({ finding }: { finding: Finding }) {
 export function ResultsScreen({
   findings,
   onBackToHome,
+  archived = false,
 }: ResultsScreenProps) {
   const criticalCount = findings.filter((f) => f.severity === 'critical').length
   const highCount = findings.filter((f) => f.severity === 'high').length
@@ -154,7 +144,9 @@ export function ResultsScreen({
           </Button>
 
           <div className="space-y-2">
-            <h1 className="text-4xl font-bold tracking-tight text-foreground">Security Analysis Complete</h1>
+            <h1 className="text-4xl font-bold tracking-tight text-foreground">
+              {archived ? 'Scan Results' : 'Security Analysis Complete'}
+            </h1>
             <p className="text-muted-foreground text-lg">
               {findings.length} issue{findings.length !== 1 ? 's' : ''} detected in this repository
             </p>

@@ -4,7 +4,9 @@ import { useState } from 'react'
 import { DashboardHome } from '@/components/dashboard-home'
 import { InputScreen } from '@/components/input-screen'
 import { PipelineDisplay } from '@/components/pipeline-display'
-import { ResultsScreen, type Finding } from '@/components/results-screen'
+import { ResultsScreen } from '@/components/results-screen'
+import { API_BASE } from '@/lib/api'
+import { toFinding, type Finding } from '@/lib/findings'
 
 type Screen = 'home' | 'input' | 'pipeline' | 'results'
 
@@ -12,11 +14,13 @@ export default function Page() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home')
   const [repoUrl, setRepoUrl] = useState('')
   const [findings, setFindings] = useState<Finding[]>([])
+  const [viewingScan, setViewingScan] = useState(false)
 
   const handleNewScan = () => {
     setCurrentScreen('input')
     setRepoUrl('')
     setFindings([])
+    setViewingScan(false)
   }
 
   const handleScan = (url: string) => {
@@ -26,7 +30,24 @@ export default function Page() {
 
   const handlePipelineComplete = (results: Finding[]) => {
     setFindings(results)
+    setViewingScan(false) // a fresh scan is not an archived re-open
     setCurrentScreen('results')
+  }
+
+  const handleViewScan = async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/history/${id}`)
+      if (!res.ok) return
+      const data = await res.json()
+      const scan = data.scan
+      if (!scan) return
+      setFindings((scan.findings || []).map(toFinding))
+      setRepoUrl(scan.meta?.repo || '')
+      setViewingScan(true)
+      setCurrentScreen('results')
+    } catch {
+      // History fetch failed — ignore; stay on the dashboard.
+    }
   }
 
   const handleBackToHome = () => {
@@ -34,14 +55,17 @@ export default function Page() {
     setCurrentScreen('home')
     setRepoUrl('')
     setFindings([])
+    setViewingScan(false)
   }
 
   return (
     <main className="bg-black min-h-screen">
-      {currentScreen === 'home' && <DashboardHome onNewScan={handleNewScan} />}
+      {currentScreen === 'home' && <DashboardHome onNewScan={handleNewScan} onViewScan={handleViewScan} />}
       {currentScreen === 'input' && <InputScreen onScan={handleScan} isLoading={false} />}
       {currentScreen === 'pipeline' && <PipelineDisplay repoUrl={repoUrl} onComplete={handlePipelineComplete} />}
-      {currentScreen === 'results' && <ResultsScreen findings={findings} onBackToHome={handleBackToHome} />}
+      {currentScreen === 'results' && (
+        <ResultsScreen findings={findings} onBackToHome={handleBackToHome} archived={viewingScan} />
+      )}
     </main>
   )
 }

@@ -14,15 +14,27 @@ app.use(express.json());
 // Recorded on every completed/failed scan and served via GET /api/history
 // so the dashboard can render real data instead of mock rows.
 const scanHistory = [];
+// id -> full results (findings + patches) so a dashboard row can be re-opened.
+const scanDetails = new Map();
 const MAX_HISTORY = 20;
 
-function recordScan(entry) {
+function recordScan(entry, fullResults) {
   scanHistory.unshift(entry);
-  if (scanHistory.length > MAX_HISTORY) scanHistory.pop();
+  if (fullResults) scanDetails.set(entry.id, fullResults);
+  if (scanHistory.length > MAX_HISTORY) {
+    const removed = scanHistory.pop();
+    if (removed) scanDetails.delete(removed.id);
+  }
 }
 
 app.get('/api/history', (_req, res) => {
   res.json({ scans: scanHistory });
+});
+
+app.get('/api/history/:id', (req, res) => {
+  const detail = scanDetails.get(req.params.id);
+  if (!detail) return res.status(404).json({ error: 'Scan not found' });
+  res.json({ scan: detail });
 });
 
 app.get('/api/health', (_req, res) => {
@@ -70,19 +82,22 @@ app.get('/api/scan', async (req, res) => {
     res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
     if (type === 'done' && data?.results) {
       const r = data.results;
-      recordScan({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        repo: r.meta?.repo || url || 'unknown',
-        date: new Date().toISOString(),
-        status: 'completed',
-        summary: {
-          totalFindings: r.summary?.totalFindings ?? 0,
-          bySeverity: r.summary?.bySeverity ?? {},
-          secrets: r.summary?.secrets ?? 0,
-          injection: r.summary?.injection ?? 0,
-          dependencies: r.summary?.dependencies ?? 0,
+      recordScan(
+        {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          repo: r.meta?.repo || url || 'unknown',
+          date: new Date().toISOString(),
+          status: 'completed',
+          summary: {
+            totalFindings: r.summary?.totalFindings ?? 0,
+            bySeverity: r.summary?.bySeverity ?? {},
+            secrets: r.summary?.secrets ?? 0,
+            injection: r.summary?.injection ?? 0,
+            dependencies: r.summary?.dependencies ?? 0,
+          },
         },
-      });
+        r
+      );
     } else if (type === 'error' && typeof url === 'string' && url) {
       // Only record real scan failures — skip the missing-param validation error.
       recordScan({

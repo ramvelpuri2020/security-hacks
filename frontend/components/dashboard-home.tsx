@@ -41,7 +41,12 @@ function shortRepo(url: string): string {
   return url.replace(/^https?:\/\/(www\.)?(github\.com|gitlab\.com|bitbucket\.org)\//, '').replace(/\/$/, '')
 }
 
-export function DashboardHome({ onNewScan }: { onNewScan: () => void }) {
+interface DashboardHomeProps {
+  onNewScan: () => void
+  onViewScan: (id: string) => void
+}
+
+export function DashboardHome({ onNewScan, onViewScan }: DashboardHomeProps) {
   const [scans, setScans] = useState<ScanSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -155,9 +160,15 @@ export function DashboardHome({ onNewScan }: { onNewScan: () => void }) {
             ) : (
               <div className="divide-y divide-white/8">
                 {scans.map((scan, idx) => (
-                  <div
+                  <button
                     key={scan.id}
-                    className="p-4 hover:bg-white/5 transition-colors cursor-pointer group"
+                    onClick={() => scan.status === 'completed' && onViewScan(scan.id)}
+                    disabled={scan.status !== 'completed'}
+                    className={`w-full p-4 text-left transition-colors group ${
+                      scan.status === 'completed'
+                        ? 'hover:bg-white/5 cursor-pointer'
+                        : 'cursor-default'
+                    }`}
                     style={{ animationDelay: `${idx * 50}ms` }}
                   >
                     <div className="flex items-center justify-between">
@@ -191,13 +202,15 @@ export function DashboardHome({ onNewScan }: { onNewScan: () => void }) {
                             </span>
                           </>
                         )}
-                        <ArrowRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <span className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity font-medium">
+                          {scan.status === 'completed' ? 'View results →' : ''}
+                        </span>
                       </div>
                     </div>
                     {scan.status === 'failed' && scan.error && (
                       <p className="text-xs text-red-400/70 mt-2 font-mono">{scan.error}</p>
                     )}
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
