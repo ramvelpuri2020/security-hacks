@@ -10,6 +10,7 @@ import { scanForInjection } from './scanners/injection.js';
 import { extractDependencies } from './scanners/dependencies.js';
 import { lookupDepCVE } from './cve.js';
 import { generatePatch } from './patchgen.js';
+import { analyzeWithLLM } from './llm-analysis.js';
 
 const GIT_URL_RE =
   /^https?:\/\/(?:www\.)?(?:github\.com|gitlab\.com|bitbucket\.org)\/[A-Za-z0-9_.\-]+\/[A-Za-z0-9_.\-]+(?:\/)?$/;
@@ -150,6 +151,19 @@ export async function runPipeline({
     maxFiles: Number(env.MAX_SCAN_FILES) || 10_000,
   };
 
+  // LLM config used by BOTH the universal semantic analysis (detection) and
+  // patch generation. Accepts the generic LLM key name and DashScope's
+  // canonical env var; undefined (not '') so callers' defaults apply.
+  // Per-patch timeout defaults to 45s — thinking models (qwen3.6-flash)
+  // are slow per response, and a too-short budget forces deterministic
+  // fallback instead of a genuine LLM-written fix.
+  const llm = {
+    apiKey: env.LLM_API_KEY || env.DASHSCOPE_API_KEY || undefined,
+    baseUrl: env.LLM_BASE_URL || undefined,
+    model: env.LLM_MODEL || undefined,
+    timeoutMs: Number(env.LLM_TIMEOUT_MS) || 45000,
+  };
+
   let tmpDir = null;
   let scanRoot = null;
   const cveResults = [];
@@ -180,12 +194,52 @@ export async function runPipeline({
     const secrets = scanForSecrets(files);
     const injection = scanForInjection(files);
     const deps = extractDependencies(scanRoot);
-    const findings = [...secrets, ...injection];
+
+    // Universal semantic analysis: the LLM reads the actual source and finds
+    // vulnerabilities in ANY language — no per-language regexes needed.
+    // Uses its OWN (longer) timeout — the per-patch 15s budget is far too
+    // short for analyzing up to 90k chars of code, and a timeout here would
+    // silently reproduce the "finished instantly, found nothing" failure.
+    let semantic = [];
+    if (llm.apiKey) {
+      const analysisTimeout = Number(env.LLM_ANALYSIS_TIMEOUT_MS) || 120000;
+      emit('step', {
+        step: 'scan',
+        message: 'Running universal AI semantic analysis on source code…',
+      });
+      const analysis = await analyzeWithLLM(files, { ...llm, timeoutMs: analysisTimeout }, {
+        signal,
+        log: (m) => console.error(m),
+      });
+      throwIfAborted(signal);
+      semantic = analysis.findings;
+      // Honest reporting: a FAILED analysis must not masquerade as "nothing
+      // found" — the user has been burned by silent zero-finding scans before.
+      emit('step', {
+        step: 'scan',
+        message: analysis.failed
+          ? 'AI semantic analysis unavailable (LLM request failed) — showing pattern-scan results'
+          : semantic.length
+            ? `AI semantic analysis complete — ${semantic.length} finding${semantic.length === 1 ? '' : 's'} found`
+            : 'AI semantic analysis complete — no additional issues found',
+      });
+    }
+
+    // Dedupe semantic findings against deterministic ones (same file+line).
+    const seen = new Set();
+    const findings = [];
+    for (const f of [...secrets, ...injection, ...semantic]) {
+      const key = `${f.file}:${f.line}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      findings.push(f);
+    }
 
     emit('scan', {
       filesScanned: files.length,
       secrets: secrets.length,
       injection: injection.length,
+      semantic: semantic.length,
       dependencies: deps.length,
       truncated,
       ...(truncated && {
@@ -216,16 +270,6 @@ export async function runPipeline({
     }
 
     // ---------- 4. PATCH GENERATION ----------
-    const llm = {
-      // Accept both the generic LLM key name and DashScope's canonical env var.
-      apiKey: env.LLM_API_KEY || env.DASHSCOPE_API_KEY,
-      // undefined (not '') so generatePatch's defaults apply when unset/empty.
-      baseUrl: env.LLM_BASE_URL || undefined,
-      model: env.LLM_MODEL || undefined,
-      // Per-call timeout — some models (e.g. thinking models like qwen3.6-flash)
-      // can take a while per response. Default 15s; bump via LLM_TIMEOUT_MS.
-      timeoutMs: Number(env.LLM_TIMEOUT_MS) || 15000,
-    };
     emit('step', {
       step: 'patch',
       message: llm.apiKey
@@ -287,6 +331,7 @@ export async function runPipeline({
         bySeverity,
         secrets: secrets.length,
         injection: injection.length,
+        semantic: semantic.length,
         dependencies: deps.length,
       },
       findings,

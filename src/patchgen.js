@@ -7,7 +7,7 @@
  */
 
 /** Strip ```json fences / markdown from a raw LLM response to get pure JSON. */
-function extractJson(raw) {
+export function extractJson(raw) {
   if (!raw) return null;
   let text = String(raw).trim();
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);

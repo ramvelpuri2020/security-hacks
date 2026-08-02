@@ -70,9 +70,11 @@ export function PipelineDisplay({
 
     // If no SSE events arrive for a while (e.g. LLM endpoint hanging), show a
     // nudge so the user knows the scan is still running rather than frozen.
+    // Threshold is above the AI semantic analysis budget (up to 120s) so a
+    // legitimately long analysis isn't falsely flagged as stalled.
     const stallTimer = setInterval(() => {
       if (doneRef.current) return
-      if (Date.now() - lastEventRef.current > 45000) {
+      if (Date.now() - lastEventRef.current > 130000) {
         setStalled(true)
       }
     }, 5000)
