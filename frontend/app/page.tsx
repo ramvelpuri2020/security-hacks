@@ -41,7 +41,7 @@ export default function Page() {
       {currentScreen === 'home' && <DashboardHome onNewScan={handleNewScan} />}
       {currentScreen === 'input' && <InputScreen onScan={handleScan} isLoading={false} />}
       {currentScreen === 'pipeline' && <PipelineDisplay repoUrl={repoUrl} onComplete={handlePipelineComplete} />}
-      {currentScreen === 'results' && <ResultsScreen findings={findings} onBackToInput={handleBackToHome} />}
+      {currentScreen === 'results' && <ResultsScreen findings={findings} onBackToHome={handleBackToHome} />}
     </main>
   )
 }

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { BarChart3, Shield, AlertOctagon, TrendingUp, ArrowRight, GitBranch, Plus, Boxes, XCircle } from 'lucide-react'
+import { BarChart3, Shield, ArrowRight, GitBranch, Plus, Boxes, XCircle } from 'lucide-react'
 import { API_BASE } from '@/lib/api'
 
 interface ScanSummary {

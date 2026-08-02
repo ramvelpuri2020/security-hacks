@@ -21,7 +21,7 @@ export type Finding = {
 
 interface ResultsScreenProps {
   findings: Finding[]
-  onBackToInput: () => void
+  onBackToHome: () => void
 }
 
 const severityConfig = {
@@ -127,7 +127,7 @@ function FindingCard({ finding }: { finding: Finding }) {
 
 export function ResultsScreen({
   findings,
-  onBackToInput,
+  onBackToHome,
 }: ResultsScreenProps) {
   const criticalCount = findings.filter((f) => f.severity === 'critical').length
   const highCount = findings.filter((f) => f.severity === 'high').length
@@ -146,7 +146,7 @@ export function ResultsScreen({
         <div className="space-y-4">
           <Button
             variant="ghost"
-            onClick={onBackToInput}
+            onClick={onBackToHome}
             className="gap-2 text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="w-4 h-4" />
