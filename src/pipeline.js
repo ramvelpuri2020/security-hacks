@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import * as tar from 'tar';
 
 import { walkFiles } from './util.js';
 import { scanForSecrets } from './scanners/secrets.js';
@@ -12,6 +13,12 @@ import { generatePatch } from './patchgen.js';
 
 const GIT_URL_RE =
   /^https?:\/\/(?:www\.)?(?:github\.com|gitlab\.com|bitbucket\.org)\/[A-Za-z0-9_.\-]+\/[A-Za-z0-9_.\-]+(?:\/)?$/;
+
+const GITHUB_URL_RE = /github\.com\/([A-Za-z0-9_.\-]+)\/([A-Za-z0-9_.\-]+?)(?:\.git)?\/?$/;
+
+function isGithubUrl(url) {
+  return GITHUB_URL_RE.test(url.trim());
+}
 
 function throwIfAborted(signal) {
   if (signal && signal.aborted) {
@@ -26,6 +33,56 @@ export function validateRepoUrl(url) {
     throw new Error(
       'Invalid repo URL. Expected a GitHub/GitLab/Bitbucket repository URL, e.g. https://github.com/owner/repo'
     );
+  }
+}
+
+/** Max repo tarball size we'll download (~50 MB) — stops giant repos hanging the demo and keeps memory safe on Render's free tier. */
+const MAX_TARBALL_BYTES = 50 * 1024 * 1024;
+
+/**
+ * Download a GitHub repo as a tarball and extract it.
+ * Uses the GitHub API tarball endpoint (resolves the default branch, follows
+ * the redirect to codeload) instead of `git clone` — git's smart-HTTP protocol
+ * can hit credential-prompt/auth failures from cloud/datacenter IPs (e.g.
+ * Render), while plain HTTPS works everywhere. Public repos only, shallow by
+ * nature, deleted after the run.
+ */
+async function fetchGithubTarball(url, dest, { signal, timeoutMs = 90000 } = {}) {
+  const m = url.trim().match(GITHUB_URL_RE);
+  if (!m) throw new Error(`Could not parse GitHub repo from: ${url}`);
+  const [, owner, repo] = m;
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/tarball`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const fetchSignal = signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
+  try {
+    const res = await fetch(apiUrl, {
+      signal: fetchSignal,
+      redirect: 'follow',
+      headers: { 'User-Agent': 'patch-scanner' }, // GitHub API requires a User-Agent
+    });
+    if (res.status === 404) {
+      throw new Error(`Repo "${owner}/${repo}" not found or private — scanning requires a public repository`);
+    }
+    if (res.status === 403 || res.status === 429) {
+      throw new Error(`GitHub API rate limit hit (HTTP ${res.status}) — wait a few minutes and retry`);
+    }
+    if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`);
+    const length = Number(res.headers.get('content-length') || 0);
+    if (length > MAX_TARBALL_BYTES) {
+      throw new Error(`Repo too large (${(length / 1e6).toFixed(0)} MB — max ${MAX_TARBALL_BYTES / 1e6} MB)`);
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    const tarballPath = path.join(path.dirname(dest), 'repo.tar.gz');
+    fs.writeFileSync(tarballPath, buf);
+    fs.mkdirSync(dest, { recursive: true });
+    // strip:1 removes the top-level `<owner>-<repo>-<sha>/` folder
+    await tar.x({ file: tarballPath, cwd: dest, strip: 1 });
+  } finally {
+    // Always clean up the tarball (also when tar.x throws), plus the timeout.
+    fs.rmSync(path.join(path.dirname(dest), 'repo.tar.gz'), { force: true });
+    clearTimeout(timer);
   }
 }
 
@@ -95,8 +152,12 @@ export async function runPipeline({
       validateRepoUrl(url);
       tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'patch-'));
       scanRoot = path.join(tmpDir, 'repo');
-      emit('step', { step: 'clone', message: `Cloning ${url.trim()} (shallow clone)…` });
-      await runGitClone(url, scanRoot);
+      emit('step', { step: 'clone', message: `Cloning ${url.trim()}…` });
+      if (isGithubUrl(url)) {
+        await fetchGithubTarball(url, scanRoot, { signal });
+      } else {
+        await runGitClone(url, scanRoot);
+      }
       throwIfAborted(signal);
       emit('step', { step: 'clone', message: 'Clone complete' });
     }

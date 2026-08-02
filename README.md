@@ -77,8 +77,8 @@ SSE payloads are `event: <type>\ndata: <json>\n\n` — the browser-native `Event
 
 ## Safety & scoping
 
-- **Shallow clone** (`--depth 1 --single-branch`) into a temp dir, **deleted after the run**.
-- `git` is spawned with an **args array** (never a shell string) → the URL can't inject commands.
+- **Repos are downloaded as tarballs** from `codeload.github.com` (no `git clone`) into a temp dir, **deleted after the run** — this avoids git's smart-HTTP auth quirks from cloud/datacenter IPs. GitLab/Bitbucket URLs fall back to a shallow `git clone --depth 1`.
+- Any subprocess (`git`) is spawned with an **args array** (never a shell string) → the URL can't inject commands.
 - Only source extensions are scanned; `node_modules`, `.git`, build output, minified bundles, and >512 KB files are skipped.
 - Hard caps on total scanned bytes/files.
 - **No GitHub write access** — patches are generated diffs shown in the UI (with a "copy fix" option), never pushed.
