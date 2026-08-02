@@ -70,8 +70,9 @@ SSE payloads are `event: <type>\ndata: <json>\n\n` — the browser-native `Event
 | --- | --- | --- |
 | `TAVILY_API_KEY` | Live CVE lookup via Tavily (1,000 free credits/mo) | optional |
 | `LLM_API_KEY` | AI patch generation (Qwen/DashScope or OpenRouter) | optional |
-| `LLM_BASE_URL` | OpenAI-compatible base URL (defaults to DashScope) | optional |
-| `LLM_MODEL` | Model name (default `qwen-plus`) | optional |
+| `DASHSCOPE_API_KEY` | Alias for the LLM key — DashScope's canonical env var name (either this or `LLM_API_KEY` works) | optional |
+| `LLM_BASE_URL` | OpenAI-compatible base URL (defaults to DashScope; set to your Model Studio endpoint if you have a regional/dedicated one) | optional |
+| `LLM_MODEL` | Model name (default `qwen-plus`; e.g. `qwen3.6-flash`) | optional |
 | `PORT` | Server port (default 4000) | optional |
 | `MAX_SCAN_BYTES` / `MAX_SCAN_FILES` | Caps so giant repos can't hang the demo | optional |
 

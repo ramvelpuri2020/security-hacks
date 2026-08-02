@@ -17,8 +17,9 @@ app.get('/api/health', (_req, res) => {
     version: '0.1.0',
     capabilities: {
       cveLookup: Boolean(process.env.TAVILY_API_KEY),
-      aiPatches: Boolean(process.env.LLM_API_KEY),
+      aiPatches: Boolean(process.env.LLM_API_KEY || process.env.DASHSCOPE_API_KEY),
       llmModel: process.env.LLM_MODEL || 'qwen-plus (default)',
+      llmProvider: process.env.LLM_BASE_URL ? 'custom (LLM_BASE_URL)' : 'dashscope (default)',
     },
   });
 });
@@ -74,5 +75,5 @@ const port = Number(process.env.PORT) || 4000;
 app.listen(port, () => {
   console.log(`PATCH backend listening on http://localhost:${port}`);
   console.log(`  CVE lookup:   ${process.env.TAVILY_API_KEY ? 'ON (Tavily)' : 'OFF — set TAVILY_API_KEY'}`);
-  console.log(`  AI patches:   ${process.env.LLM_API_KEY ? 'ON' : 'OFF (deterministic fallback) — set LLM_API_KEY'}`);
+  console.log(`  AI patches:   ${process.env.LLM_API_KEY || process.env.DASHSCOPE_API_KEY ? 'ON' : 'OFF (deterministic fallback) — set LLM_API_KEY or DASHSCOPE_API_KEY'}`);
 });

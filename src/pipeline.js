@@ -202,15 +202,17 @@ export async function runPipeline({
 
     // ---------- 4. PATCH GENERATION ----------
     const llm = {
-      apiKey: env.LLM_API_KEY,
-      baseUrl: env.LLM_BASE_URL,
-      model: env.LLM_MODEL,
+      // Accept both the generic LLM key name and DashScope's canonical env var.
+      apiKey: env.LLM_API_KEY || env.DASHSCOPE_API_KEY,
+      // undefined (not '') so generatePatch's defaults apply when unset/empty.
+      baseUrl: env.LLM_BASE_URL || undefined,
+      model: env.LLM_MODEL || undefined,
     };
     emit('step', {
       step: 'patch',
       message: llm.apiKey
         ? `Generating patches for ${findings.length} finding${findings.length === 1 ? '' : 's'}…`
-        : `Generating suggested fixes for ${findings.length} finding${findings.length === 1 ? '' : 's'} (deterministic mode — set LLM_API_KEY for AI patches)`,
+        : `Generating suggested fixes for ${findings.length} finding${findings.length === 1 ? '' : 's'} (deterministic mode — set LLM_API_KEY or DASHSCOPE_API_KEY for AI patches)`,
     });
 
     for (let i = 0; i < findings.length; i++) {
