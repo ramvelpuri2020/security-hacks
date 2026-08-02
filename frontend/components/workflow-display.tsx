@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { API_BASE } from '@/lib/api'
 import { toFinding, type Finding } from '@/lib/findings'
-import { ArrowLeft, CheckCircle2, ExternalLink, Loader2, Workflow, XCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, ExternalLink, Loader2, RefreshCw, Workflow, XCircle } from 'lucide-react'
 
 interface WorkflowDisplayProps {
   repoUrl: string
@@ -21,6 +21,18 @@ type RunState =
 const STATUS_TEXT: Record<string, string> = {
   pending: 'Queued — Render is provisioning a dedicated instance…',
   running: 'Scan running on Render’s managed infrastructure…',
+}
+
+/** Fetch with a hard timeout so the UI can never hang on a silent request. */
+async function fetchWithTimeout(url: string, options: RequestInit = {}, ms = 15000) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal })
+    return res
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export function WorkflowDisplay({ repoUrl, onComplete, onBack }: WorkflowDisplayProps) {
@@ -41,7 +53,7 @@ export function WorkflowDisplay({ repoUrl, onComplete, onBack }: WorkflowDisplay
   const poll = useCallback(
     async (runId: string) => {
       try {
-        const res = await fetch(`${API_BASE}/api/scan/workflow/${runId}`)
+        const res = await fetchWithTimeout(`${API_BASE}/api/scan/workflow/${runId}`, {}, 10000)
         const data = await res.json().catch(() => ({}))
         if (!res.ok) {
           stopPolling()
@@ -70,43 +82,53 @@ export function WorkflowDisplay({ repoUrl, onComplete, onBack }: WorkflowDisplay
     [stopPolling]
   )
 
+  const startRun = useCallback(async () => {
+    stopPolling()
+    setState({ phase: 'starting' })
+    setElapsed(0)
+    try {
+      const res = await fetchWithTimeout(
+        `${API_BASE}/api/scan/workflow`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: repoUrl }),
+        },
+        20000
+      )
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setState({ phase: 'error', message: data.error || `Could not start workflow (HTTP ${res.status})` })
+        return
+      }
+      const runId = data.taskRunId
+      if (!runId) {
+        setState({ phase: 'error', message: 'Backend did not return a workflow run id.' })
+        return
+      }
+      setState({ phase: 'pending', runId })
+      poll(runId)
+      pollRef.current = setInterval(() => poll(runId), 3000)
+    } catch (err) {
+      const timedOut = (err as { name?: string } | null)?.name === 'AbortError'
+      setState({
+        phase: 'error',
+        message: timedOut
+          ? `Timed out contacting the backend (${API_BASE}). Is the backend deployed and reachable?`
+          : 'Could not reach the backend to start the workflow.',
+      })
+    }
+  }, [repoUrl, poll, stopPolling])
+
   useEffect(() => {
     // Guard against React StrictMode double-mount in dev — otherwise two
     // workflow runs get kicked off.
     if (startedRef.current) return
     startedRef.current = true
-    let cancelled = false
-    const start = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/scan/workflow`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: repoUrl }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (cancelled) return
-        if (!res.ok) {
-          setState({ phase: 'error', message: data.error || `Could not start workflow (HTTP ${res.status})` })
-          return
-        }
-        const runId = data.taskRunId
-        if (!runId) {
-          setState({ phase: 'error', message: 'Backend did not return a workflow run id.' })
-          return
-        }
-        setState({ phase: 'pending', runId })
-        poll(runId)
-        pollRef.current = setInterval(() => poll(runId), 3000)
-      } catch {
-        if (!cancelled) setState({ phase: 'error', message: 'Could not reach the backend to start the workflow.' })
-      }
-    }
-    start()
-    return () => {
-      cancelled = true
-      stopPolling()
-    }
-  }, [repoUrl, poll, stopPolling])
+    startRun()
+    return stopPolling
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startRun, stopPolling])
 
   useEffect(() => {
     if (state.phase !== 'pending' && state.phase !== 'running') return
@@ -162,7 +184,7 @@ export function WorkflowDisplay({ repoUrl, onComplete, onBack }: WorkflowDisplay
                 className="inline-flex items-center gap-1.5 text-xs text-primary/80 hover:text-primary transition-colors"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-                Watch this run live in the Render dashboard
+                Watch this run live in the Render dashboard (Workflows → securrity-hacks → scan_repo)
               </a>
             </div>
           )}
@@ -183,13 +205,22 @@ export function WorkflowDisplay({ repoUrl, onComplete, onBack }: WorkflowDisplay
                   <p className="text-destructive/80">{state.message}</p>
                 </div>
               </div>
-              <button
-                onClick={onBack}
-                className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to input
-              </button>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={startRun}
+                  className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Retry
+                </button>
+                <button
+                  onClick={onBack}
+                  className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to input
+                </button>
+              </div>
             </div>
           )}
         </div>
