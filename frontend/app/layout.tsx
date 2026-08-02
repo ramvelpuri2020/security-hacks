@@ -9,7 +9,6 @@ const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'Security Scanner',
   description: 'Multi-stage security vulnerability scanner',
-  generator: 'v0.app',
   icons: {
     icon: [
       {
