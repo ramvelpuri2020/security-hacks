@@ -5,9 +5,14 @@ import { PipelineStepper, type PipelineStage } from './pipeline-stepper'
 import { API_BASE } from '@/lib/api'
 import { toFinding, type Finding } from '@/lib/findings'
 
+export interface ScanMeta {
+  truncated?: boolean
+  truncatedMessage?: string | null
+}
+
 interface PipelineDisplayProps {
   repoUrl: string
-  onComplete: (findings: Finding[]) => void
+  onComplete: (findings: Finding[], meta?: ScanMeta) => void
 }
 
 export function PipelineDisplay({
@@ -25,11 +30,15 @@ export function PipelineDisplay({
   const [error, setError] = useState('')
   const [llmFallback, setLlmFallback] = useState('')
   const [stalled, setStalled] = useState(false)
+  const [truncated, setTruncated] = useState(false)
+  const [truncatedMessage, setTruncatedMessage] = useState('')
 
   const findingsRef = useRef<any[]>([])
   const cveCountRef = useRef(0)
   const doneRef = useRef(false)
   const lastEventRef = useRef(Date.now())
+  const truncatedRef = useRef(false)
+  const truncatedMessageRef = useRef('')
 
   const setStage = (
     id: string,
@@ -49,9 +58,13 @@ export function PipelineDisplay({
     cveCountRef.current = 0
     doneRef.current = false
     lastEventRef.current = Date.now()
+    truncatedRef.current = false
+    truncatedMessageRef.current = ''
     setError('')
     setLlmFallback('')
     setStalled(false)
+    setTruncated(false)
+    setTruncatedMessage('')
 
     // If no SSE events arrive for a while (e.g. LLM endpoint hanging), show a
     // nudge so the user knows the scan is still running rather than frozen.
@@ -113,6 +126,16 @@ export function PipelineDisplay({
         status: 'complete',
         result: `parsed ${data.dependencies} dependencies`,
       })
+      // Partial-scan honesty: remember truncation so the results screen can
+      // tell the user this wasn't a full-repo scan.
+      if (data.truncated) {
+        truncatedRef.current = true
+        truncatedMessageRef.current =
+          data.truncatedMessage ||
+          'This repo exceeds scan limits — results reflect a partial scan, not the full repository.'
+        setTruncated(true)
+        setTruncatedMessage(truncatedMessageRef.current)
+      }
     })
 
     es.addEventListener('finding', (event) => {
@@ -160,7 +183,10 @@ export function PipelineDisplay({
         result: `${count} patch${count === 1 ? '' : 'es'} generated`,
       })
       const results = data.results?.findings || findingsRef.current
-      onComplete(results.map(toFinding))
+      onComplete(results.map(toFinding), {
+        truncated: truncatedRef.current,
+        truncatedMessage: truncatedMessageRef.current || null,
+      })
       es.close()
     })
 
@@ -215,6 +241,8 @@ export function PipelineDisplay({
               <p className="text-xs text-yellow-400/80 font-mono">
                 AI patch service unavailable ({llmFallback}) — showing suggested fixes
               </p>
+            ) : truncated ? (
+              <p className="text-xs text-amber-400/80 font-mono">⚠ {truncatedMessage}</p>
             ) : (
               <p className="text-xs text-muted-foreground">Running multi-stage security analysis...</p>
             )}

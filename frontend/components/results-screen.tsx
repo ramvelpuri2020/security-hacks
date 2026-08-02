@@ -11,6 +11,7 @@ interface ResultsScreenProps {
   findings: Finding[]
   onBackToHome: () => void
   archived?: boolean
+  warning?: string | null
 }
 
 const severityConfig = {
@@ -118,6 +119,7 @@ export function ResultsScreen({
   findings,
   onBackToHome,
   archived = false,
+  warning = null,
 }: ResultsScreenProps) {
   const criticalCount = findings.filter((f) => f.severity === 'critical').length
   const highCount = findings.filter((f) => f.severity === 'high').length
@@ -151,6 +153,13 @@ export function ResultsScreen({
               {findings.length} issue{findings.length !== 1 ? 's' : ''} detected in this repository
             </p>
           </div>
+
+          {/* Partial-scan honesty banner */}
+          {warning && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+              ⚠ {warning}
+            </div>
+          )}
 
           {/* Summary stats grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">

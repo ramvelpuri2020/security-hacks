@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { API_BASE } from '@/lib/api'
 import { toFinding, type Finding } from '@/lib/findings'
+import { type ScanMeta } from './pipeline-display'
 import { ArrowLeft, CheckCircle2, ExternalLink, Loader2, RefreshCw, Workflow, XCircle } from 'lucide-react'
 
 interface WorkflowDisplayProps {
   repoUrl: string
-  onComplete: (findings: Finding[]) => void
+  onComplete: (findings: Finding[], meta?: ScanMeta) => void
   onBack: () => void
 }
 
@@ -65,7 +66,12 @@ export function WorkflowDisplay({ repoUrl, onComplete, onBack }: WorkflowDisplay
           const results = data.results
           const findings = Array.isArray(results?.findings) ? results.findings : []
           setState({ phase: 'done' })
-          onCompleteRef.current(findings.map(toFinding))
+          // Forward partial-scan meta so the results screen can warn when the
+          // repo exceeded scan limits (workflow runs scan the same pipeline).
+          onCompleteRef.current(findings.map(toFinding), {
+            truncated: Boolean(results?.meta?.truncated),
+            truncatedMessage: results?.meta?.truncatedMessage || null,
+          })
           return
         }
         if (data.status === 'failed' || data.status === 'canceled') {

@@ -109,17 +109,28 @@ function runGitClone(url, dest) {
   });
 }
 
-/** Collect scannable files with hard caps so giant repos can't hang the demo. */
+/**
+ * Collect scannable files with hard caps so giant repos can't hang the demo.
+ * Returns { files, truncated, scannedBytes } so callers KNOW when a repo was
+ * too big to scan fully (partial-scan honesty).
+ */
 function collectFiles(root, limits) {
   const out = [];
   let bytes = 0;
+  let truncated = false;
   for (const entry of walkFiles(root)) {
-    if (out.length >= limits.maxFiles) break;
-    if (bytes + entry.size > limits.maxBytes) break;
+    if (out.length >= limits.maxFiles) {
+      truncated = true;
+      break;
+    }
+    if (bytes + entry.size > limits.maxBytes) {
+      truncated = true;
+      break;
+    }
     bytes += entry.size;
     out.push(entry);
   }
-  return out;
+  return { files: out, truncated, scannedBytes: bytes };
 }
 
 /**
@@ -165,7 +176,7 @@ export async function runPipeline({
     // ---------- 2. SCAN ----------
     throwIfAborted(signal);
     emit('step', { step: 'scan', message: 'Walking source tree…' });
-    const files = collectFiles(scanRoot, limits);
+    const { files, truncated, scannedBytes } = collectFiles(scanRoot, limits);
     const secrets = scanForSecrets(files);
     const injection = scanForInjection(files);
     const deps = extractDependencies(scanRoot);
@@ -176,6 +187,10 @@ export async function runPipeline({
       secrets: secrets.length,
       injection: injection.length,
       dependencies: deps.length,
+      truncated,
+      ...(truncated && {
+        truncatedMessage: `Repo exceeds scan limits (${(scannedBytes / 1e6).toFixed(1)} MB of files scanned, cap is ${(limits.maxBytes / 1e6).toFixed(0)} MB / ${limits.maxFiles} files) — results reflect a partial scan, not the full repo.`,
+      }),
     });
     for (const f of findings) emit('finding', f);
 
@@ -257,7 +272,11 @@ export async function runPipeline({
       meta: {
         repo: localPath ? `local:${scanRoot}` : url.trim(),
         filesScanned: files.length,
-        scannedBytes: files.reduce((a, f) => a + f.size, 0),
+        scannedBytes,
+        truncated,
+        truncatedMessage: truncated
+          ? `Repo exceeds scan limits (${(scannedBytes / 1e6).toFixed(1)} MB of files scanned, cap is ${(limits.maxBytes / 1e6).toFixed(0)} MB / ${limits.maxFiles} files) — results reflect a partial scan, not the full repo.`
+          : null,
         scannedAt: new Date().toISOString(),
         llmMode: llm.apiKey ? 'ai' : 'deterministic',
         llmModel: llm.apiKey ? llm.model || 'default' : null,
