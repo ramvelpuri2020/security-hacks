@@ -19,16 +19,38 @@
 // @renderinc/sdk export is the Render REST client). Per the SDK README:
 //   import { task } from '@renderinc/sdk/workflows';
 import { task } from '@renderinc/sdk/workflows';
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 
 // Resolve the job runner relative to THIS module so it works regardless of the
 // workflow service's working directory (never assume cwd == repo root).
 const WORKFLOW_RUNNER = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'workflow-run.js');
 
-const execFileAsync = promisify(execFile);
+/**
+ * Run the job runner, streaming its stdout/stderr to THIS process's stdout so
+ * every pipeline step (clone → scan → CVE → patch) shows up in the Render
+ * run logs live, while still capturing the output to parse the report out.
+ */
+function runRunner(repoUrl) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [WORKFLOW_RUNNER, repoUrl.trim()], {
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+      process.stdout.write(chunk); // stream into the run log
+    });
+    child.stderr.on('data', (chunk) => process.stderr.write(chunk));
+    child.on('error', (err) => reject(err));
+    child.on('close', (code) => {
+      if (code === 0) resolve(stdout);
+      else reject(new Error(`workflow-run.js exited with code ${code}`));
+    });
+  });
+}
 
 /**
  * scan_repo(url) — full security scan as a managed workflow run.
@@ -46,11 +68,7 @@ export const scan_repo = task(
     if (typeof repoUrl !== 'string' || !repoUrl.trim()) {
       throw new Error('scan_repo requires a repo URL string as input, e.g. ["https://github.com/owner/repo"]');
     }
-    const { stdout } = await execFileAsync(
-      process.execPath,
-      [WORKFLOW_RUNNER, repoUrl.trim()],
-      { maxBuffer: 128 * 1024 * 1024, env: process.env }
-    );
+    const { stdout } = await runRunner(repoUrl);
     const m = stdout.match(/REPORT_START\n([\s\S]*?)\nREPORT_END/);
     if (!m) throw new Error('workflow-run.js finished without producing a report');
     return JSON.parse(m[1]);

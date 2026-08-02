@@ -143,6 +143,18 @@ const SECRET_PATTERNS = [
     fix: 'Remove the key from the repo (it should never have been committed) and rotate it.',
   },
   {
+    id: 'hardcoded_named_secret',
+    label: 'Hardcoded secret in named variable',
+    severity: 'high',
+    confidence: 'medium',
+    regex:
+      /\b(?:JWT_?SECRET|SECRET_?KEY|SECRET_?PHRASE|AUTH_?SECRET|SIGNING_?KEY|ENCRYPTION_?KEY|PRIVATE_?KEY|CLIENT_?SECRET|ACCESS_?KEY|SESSION_?SECRET)\b\s*[=:]\s*['"][^'"\s]{6,}['"]/gi,
+    envVar: 'JWT_SECRET',
+    description:
+      'A secret stored in a clearly-named variable (JWT_SECRET, SECRET_KEY, etc.) directly in source. Even a weak-looking value like "secret123" is a real finding — anyone with repo access can forge tokens or decrypt data.',
+    fix: 'Load the secret from an environment variable or secrets manager, and rotate it if it has ever been committed.',
+  },
+  {
     id: 'hardcoded_credential',
     label: 'Possible hardcoded credential',
     severity: 'medium',

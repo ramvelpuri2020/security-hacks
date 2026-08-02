@@ -59,15 +59,24 @@ function parseRequirementsFile(filePath, deps) {
 /**
  * Walk a repo and extract every dependency with a pinned version.
  * Returns a deduplicated list: [{ name, version, ecosystem, source, section, range }].
+ *
+ * package.json files are picked up ANYWHERE in the tree (not just the root) so
+ * monorepos and apps with their manifest under src/ (e.g. payatu/DVAPI) get
+ * proper CVE coverage instead of a silent "no dependencies" false negative.
  */
 export function extractDependencies(root) {
   const deps = [];
   const rootPkg = path.join(root, 'package.json');
   if (fs.existsSync(rootPkg)) parsePackageJson(rootPkg, deps);
 
-  // requirements files anywhere in the tree (usually at root)
+  // requirements files + package.json anywhere in the tree (usually at root)
   for (const file of walkFiles(root)) {
-    if (
+    if (file.name === 'package.json') {
+      // Root manifest already parsed above — avoid double-add (dedupe handles
+      // it anyway, but skip the redundant read).
+      if (path.resolve(file.full) === path.resolve(rootPkg)) continue;
+      parsePackageJson(file.full, deps);
+    } else if (
       file.name === 'requirements.txt' ||
       file.name === 'requirements-dev.txt' ||
       file.name === 'requirements-prod.txt'
