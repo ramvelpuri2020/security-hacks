@@ -1,0 +1,39 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deploys the PATCH backend as a managed web service.
+#
+# Deploy flow:
+#   1. Push this repo to GitHub
+#   2. https://render.com → New → Blueprint → connect the GitHub repo
+#   3. Fill in the two secret env vars (sync: false) in the Render dashboard
+#   4. Deploy → live URL → https://<app>.onrender.com/api/health
+#
+# Note: the free tier spins the service down after inactivity (cold start on
+# first request after idle). Background workers / Render Workflows require a
+# paid plan — see README Roadmap.
+
+services:
+  - type: web
+    name: patch-backend
+    runtime: node
+    region: ohio
+    plan: free
+    branch: main # change if your repo's default branch isn't main
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # Optional but recommended: live CVE lookup via Tavily (https://tavily.com)
+      - key: TAVILY_API_KEY
+        sync: false
+      # Optional but recommended: AI patch generation.
+      # Defaults point at Qwen via DashScope; swap LLM_BASE_URL/LLM_MODEL for OpenRouter.
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_BASE_URL
+        value: https://dashscope-us.aliyuncs.com/compatible-mode/v1
+      - key: LLM_MODEL
+        value: qwen-plus
+      # Pin Node to a concrete LTS (code requires >=20.3 for AbortSignal.any)
+      - key: NODE_VERSION
+        value: 22.14.0

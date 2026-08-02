@@ -1,0 +1,4 @@
+# Deliberately vulnerable — pinned to old versions with known CVEs.
+requests==2.19.1
+Flask==0.12.2
+urllib3==1.22

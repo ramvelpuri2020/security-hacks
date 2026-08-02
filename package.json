@@ -1,0 +1,20 @@
+{
+  "name": "patch-backend",
+  "version": "0.1.0",
+  "description": "PATCH — paste a GitHub repo URL, scan for real vulnerabilities (secrets, injection risks, outdated deps), cross-reference live CVE data, generate patches.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "scan:local": "node scripts/local-scan.js"
+  },
+  "engines": {
+    "node": ">=20.3"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2"
+  }
+}

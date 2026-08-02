@@ -1,0 +1,16 @@
+{
+  "name": "vulnerable-app",
+  "version": "1.0.0",
+  "description": "Deliberately vulnerable sample app for PATCH demo/testing. Contains planted secrets, injection patterns, and outdated packages with known CVEs.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "4.17.1",
+    "lodash": "4.17.4",
+    "axios": "0.18.1",
+    "minimist": "1.2.0",
+    "underscore": "1.8.3"
+  }
+}
