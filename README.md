@@ -2,7 +2,7 @@
 
 **Paste a GitHub repo URL → clone → scan for real vulnerabilities → cross-reference live CVE data → generate working patches.**
 
-A static-analysis + AI-patching service. Detection is **deterministic** (regex + dependency parsing — verifiable, not hallucinated); the LLM is narrowed to what it's good at: explaining findings clearly and generating the fix diff.
+A static-analysis + AI-patching service. Detection is a **hybrid**: deterministic engines (secrets regex, risky-code regex, multi-manifest dependency parsing — verifiable, reproducible) **plus** a universal **AI semantic analysis pass** that reads the repo's source in *any* language and finds vulnerabilities a regex list never could. The LLM's second job is writing the fix diff.
 
 ## Architecture
 
@@ -10,11 +10,13 @@ A static-analysis + AI-patching service. Detection is **deterministic** (regex +
 Frontend (your existing app)
    │  GET /api/scan?url=https://github.com/owner/repo   (Server-Sent Events)
    ▼
-Express backend ── runPipeline ──┬─ 1. clone   (git clone --depth 1, temp dir, auto-cleanup)
-                                 ├─ 2. scan    ├─ secrets    (AWS, GitHub, OpenAI, Slack, Stripe, private keys…)
-                                 │              ├─ injection  (SQL concat, eval, exec, shell=True, XSS sinks…)
-                                 │              └─ deps       (package.json + requirements.txt)
-                                 ├─ 3. CVE     (Tavily search restricted to nvd.nist.gov + cve.org)
+Express backend ── runPipeline ──┬─ 1. clone   (GitHub tarball API or git clone --depth 1, temp dir, auto-cleanup)
+                                 ├─ 2. scan    ├─ secrets    (AWS, GitHub, OpenAI, Slack, Stripe, private keys, crypto…)
+                                 │              ├─ injection  (SQL concat, eval, exec, shell=True, XSS sinks, NoSQL…)
+                                 │              ├─ deps       (ANY manifest: package.json, requirements*.txt/req.txt,
+                                 │              │              build.gradle, pom.xml, go.mod, Gemfile, Cargo.toml, composer.json)
+                                 │              └─ AI analysis (LLM reads source in ANY language → validated findings)
+                                 ├─ 3. CVE     (Tavily live search per dep, restricted to nvd.nist.gov + cve.org)
                                  └─ 4. patch   (Qwen via DashScope — OpenAI-compatible; deterministic fallback)
 ```
 

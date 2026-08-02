@@ -172,7 +172,7 @@ export function WorkflowDisplay({ repoUrl, onComplete, onBack }: WorkflowDisplay
                 </span>
               </div>
               <div className="space-y-2">
-                {['Clone repository', 'Scan for secrets & injection risks', 'Research live CVEs (Tavily)', 'Generate patches (Qwen)'].map((step, i) => (
+                {['Clone repository', 'Scan code (secrets, injection, AI analysis)', 'Research live CVEs (Tavily)', 'Generate patches (Qwen)'].map((step, i) => (
                   <div key={step} className="flex items-center gap-3 text-sm">
                     <div
                       className={`w-2 h-2 rounded-full ${i <= 0 ? 'bg-primary animate-pulse' : 'bg-white/10'}`}
@@ -192,7 +192,7 @@ export function WorkflowDisplay({ repoUrl, onComplete, onBack }: WorkflowDisplay
                 className="inline-flex items-center gap-1.5 text-xs text-primary/80 hover:text-primary transition-colors"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-                Watch this run live in the Render dashboard (Workflows → securrity-hacks → scan_repo)
+                Watch this run live in the Render dashboard (Workflows → your workflow → scan_repo)
               </a>
             </div>
           )}

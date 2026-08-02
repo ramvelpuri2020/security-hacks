@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { Check } from 'lucide-react'
 
 export type PipelineStage = {
@@ -15,15 +14,9 @@ interface PipelineStepperProps {
 }
 
 export function PipelineStepper({ stages }: PipelineStepperProps) {
-  const [displayStages, setDisplayStages] = useState<PipelineStage[]>(stages)
-
-  useEffect(() => {
-    setDisplayStages(stages)
-  }, [stages])
-
   return (
     <div className="w-full max-w-2xl mx-auto space-y-1">
-      {displayStages.map((stage, index) => (
+      {stages.map((stage, index) => (
         <div
           key={stage.id}
           className="group animate-in fade-in slide-in-from-left-4"

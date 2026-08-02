@@ -10,32 +10,39 @@ interface InputScreenProps {
   isLoading?: boolean
 }
 
+// Accept any Git host the backend supports (GitHub/GitLab/Bitbucket) — the
+// backend accepts the same set, so the frontend must not be stricter.
+const REPO_URL_RE =
+  /^https?:\/\/(www\.)?(github\.com|gitlab\.com|bitbucket\.org)\/[A-Za-z0-9_.\-]+\/[A-Za-z0-9_.\-]+\/?$/
+
+// Public, deliberately-vulnerable repos — a neutral way to try the scanner
+// without any dependency on our own repos.
+const EXAMPLE_REPOS = [
+  'https://github.com/payatu/DVAPI',
+  'https://github.com/michealkeines/Vulnerable-API',
+  'https://github.com/optiv/InsecureShop',
+]
+
 export function InputScreen({ onScan, isLoading = false }: InputScreenProps) {
-  // Default to the demo repo so a fresh run always finds real vulnerabilities.
-  const [repoUrl, setRepoUrl] = useState('https://github.com/ramvelpuri2020/security-hacks')
+  const [repoUrl, setRepoUrl] = useState('')
   const [error, setError] = useState('')
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
-    if (!repoUrl.trim()) {
+    const trimmed = repoUrl.trim()
+    if (!trimmed) {
       setError('Please enter a repository URL')
       return
     }
 
-    if (!repoUrl.includes('github.com') || !repoUrl.includes('/') || repoUrl.split('/').length < 5) {
-      setError('Please enter a valid GitHub repository URL')
+    if (!REPO_URL_RE.test(trimmed)) {
+      setError('Please enter a valid GitHub, GitLab, or Bitbucket repository URL')
       return
     }
 
-    onScan(repoUrl)
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-      handleSubmit(e as any)
-    }
+    onScan(trimmed)
   }
 
   return (
@@ -77,7 +84,6 @@ export function InputScreen({ onScan, isLoading = false }: InputScreenProps) {
                     setRepoUrl(e.target.value)
                     setError('')
                   }}
-                  onKeyDown={handleKeyDown}
                   disabled={isLoading}
                   className="flex-1 bg-white/5 border-white/10 text-foreground placeholder:text-muted-foreground/50 focus:border-primary/50 focus:ring-1 focus:ring-primary/30 h-11 text-base"
                 />
@@ -128,9 +134,9 @@ export function InputScreen({ onScan, isLoading = false }: InputScreenProps) {
 
           {/* Example repo suggestion */}
           <div className="pt-4 border-t border-white/8">
-            <p className="text-xs text-muted-foreground mb-3">Example repositories:</p>
+            <p className="text-xs text-muted-foreground mb-3">Try a deliberately vulnerable repo:</p>
             <div className="grid grid-cols-2 gap-2">
-              {['https://github.com/ramvelpuri2020/security-hacks', 'https://github.com/octocat/Hello-World'].map((url) => (
+              {EXAMPLE_REPOS.map((url) => (
                 <button
                   key={url}
                   onClick={() => {

@@ -124,7 +124,10 @@ export function PipelineDisplay({
       })
       setStage('injection', {
         status: 'complete',
-        result: `detected ${data.injection} injection risk${data.injection === 1 ? '' : 's'}`,
+        result:
+          data.semantic > 0
+            ? `detected ${data.injection} injection risk${data.injection === 1 ? '' : 's'} + ${data.semantic} AI-found issue${data.semantic === 1 ? '' : 's'}`
+            : `detected ${data.injection} injection risk${data.injection === 1 ? '' : 's'}`,
       })
       setStage('deps', {
         status: 'complete',
