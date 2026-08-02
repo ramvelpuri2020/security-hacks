@@ -5,10 +5,11 @@ import { DashboardHome } from '@/components/dashboard-home'
 import { InputScreen } from '@/components/input-screen'
 import { PipelineDisplay } from '@/components/pipeline-display'
 import { ResultsScreen } from '@/components/results-screen'
+import { WorkflowDisplay } from '@/components/workflow-display'
 import { API_BASE } from '@/lib/api'
 import { toFinding, type Finding } from '@/lib/findings'
 
-type Screen = 'home' | 'input' | 'pipeline' | 'results'
+type Screen = 'home' | 'input' | 'pipeline' | 'workflow' | 'results'
 
 export default function Page() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home')
@@ -23,9 +24,9 @@ export default function Page() {
     setViewingScan(false)
   }
 
-  const handleScan = (url: string) => {
+  const handleScan = (url: string, mode: 'inline' | 'workflow' = 'inline') => {
     setRepoUrl(url)
-    setCurrentScreen('pipeline')
+    setCurrentScreen(mode === 'workflow' ? 'workflow' : 'pipeline')
   }
 
   const handlePipelineComplete = (results: Finding[]) => {
@@ -63,6 +64,9 @@ export default function Page() {
       {currentScreen === 'home' && <DashboardHome onNewScan={handleNewScan} onViewScan={handleViewScan} />}
       {currentScreen === 'input' && <InputScreen onScan={handleScan} isLoading={false} />}
       {currentScreen === 'pipeline' && <PipelineDisplay repoUrl={repoUrl} onComplete={handlePipelineComplete} />}
+      {currentScreen === 'workflow' && (
+        <WorkflowDisplay repoUrl={repoUrl} onComplete={handlePipelineComplete} onBack={() => setCurrentScreen('input')} />
+      )}
       {currentScreen === 'results' && (
         <ResultsScreen findings={findings} onBackToHome={handleBackToHome} archived={viewingScan} />
       )}

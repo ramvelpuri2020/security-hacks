@@ -3,10 +3,10 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ArrowRight, GitBranch, Sparkles } from 'lucide-react'
+import { ArrowRight, GitBranch, Sparkles, Workflow } from 'lucide-react'
 
 interface InputScreenProps {
-  onScan: (repoUrl: string) => void
+  onScan: (repoUrl: string, mode?: 'inline' | 'workflow') => void
   isLoading?: boolean
 }
 
@@ -84,8 +84,7 @@ export function InputScreen({ onScan, isLoading = false }: InputScreenProps) {
                 <Button
                   type="submit"
                   disabled={isLoading || !repoUrl.trim()}
-                  size="lg"
-                  className="gap-2 px-8 bg-primary hover:bg-primary/90 h-11"
+                  className="gap-2 px-6 bg-primary hover:bg-primary/90 h-11"
                 >
                   {isLoading ? (
                     <>
@@ -93,12 +92,12 @@ export function InputScreen({ onScan, isLoading = false }: InputScreenProps) {
                       Scanning
                     </>
                   ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    Scan
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      Scan
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
@@ -108,6 +107,23 @@ export function InputScreen({ onScan, isLoading = false }: InputScreenProps) {
                 {error}
               </div>
             )}
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                disabled={isLoading || !repoUrl.trim()}
+                variant="outline"
+                onClick={() => onScan(repoUrl, 'workflow')}
+                className="gap-2 px-4 h-11 border-primary/30 text-primary/90 hover:bg-primary/10 flex-1"
+              >
+                <Workflow className="w-4 h-4" />
+                Run as Render Workflow
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground/60 text-center">
+              “Run as Render Workflow” executes the scan on a dedicated Render Workflow instance —
+              watch it live in the Render dashboard.
+            </p>
           </form>
 
           {/* Example repo suggestion */}

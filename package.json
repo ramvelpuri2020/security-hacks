@@ -7,12 +7,14 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "scan:local": "node scripts/local-scan.js"
+    "scan:local": "node scripts/local-scan.js",
+    "workflow:start": "node workflow/index.js"
   },
   "engines": {
     "node": ">=20.3"
   },
   "dependencies": {
+    "@renderinc/sdk": "^0.6.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",

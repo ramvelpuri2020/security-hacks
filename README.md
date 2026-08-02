@@ -53,7 +53,7 @@ The repo includes a `render.yaml` Blueprint that deploys the backend as a manage
 Notes:
 - The **free tier spins the service down after ~15 min idle** — the first request after sleep has a cold-start delay of a few seconds. A paid plan keeps it always-on.
 - CORS is open (hackathon-friendly), so the frontend can call the backend from anywhere.
-- Background workers / Render Workflows (the full pipeline-as-workflow upgrade) require a paid plan — see Roadmap.
+- **Render Workflows** (the full pipeline-as-workflow upgrade) is supported: the same scan can run as a managed workflow task (`workflow/index.js` + `scripts/workflow-run.js`), triggered via `POST /api/scan/workflow` and polled via `GET /api/scan/workflow/:id`. Create the workflow service in the Render dashboard (New → Workflow → build `npm ci` → start `node workflow/index.js`), then set `RENDER_API_KEY` + `RENDER_WORKFLOW_TASK` (e.g. `patch-scan/scan_repo`) on the web service.
 
 ## API
 
@@ -92,4 +92,4 @@ SSE payloads are `event: <type>\ndata: <json>\n\n` — the browser-native `Event
 
 - [ ] Frontend integration (URL input → live pipeline → severity-ranked results with expandable diffs)
 - [ ] Planted demo repo on GitHub
-- [ ] Optional: swap the in-process pipeline for a real Render Workflow (TS/Python SDK), triggered via `POST /v1/task-runs`
+- [x] Render Workflow support (SDK task in `workflow/index.js` + `scripts/workflow-run.js`, triggered via `POST /api/scan/workflow`)

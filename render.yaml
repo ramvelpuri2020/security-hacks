@@ -8,8 +8,13 @@
 #   4. Deploy → live URL → https://<app>.onrender.com/api/health
 #
 # Note: the free tier spins the service down after inactivity (cold start on
-# first request after idle). Background workers / Render Workflows require a
-# paid plan — see README Roadmap.
+# first request after idle).
+#
+# Render Workflows (the "Best Use of Render" path) is NOT defined here —
+# blueprints don't support workflows yet. Create it separately in the
+# dashboard: New → Workflow → connect this repo → build `npm ci` →
+# start `node workflow/index.js`. Then set RENDER_API_KEY + RENDER_WORKFLOW_TASK
+# below (or in the dashboard) to enable POST /api/scan/workflow.
 
 services:
   - type: web
@@ -25,6 +30,11 @@ services:
     envVars:
       # Optional but recommended: live CVE lookup via Tavily (https://tavily.com)
       - key: TAVILY_API_KEY
+        sync: false
+      # Optional: Render Workflows trigger (see comment above)
+      - key: RENDER_API_KEY
+        sync: false
+      - key: RENDER_WORKFLOW_TASK
         sync: false
       # Optional but recommended: AI patch generation.
       # Defaults point at Qwen via DashScope; swap LLM_BASE_URL/LLM_MODEL for OpenRouter.

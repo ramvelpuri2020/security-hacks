@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
-import { runPipeline } from './pipeline.js';
+import { runPipeline, validateRepoUrl } from './pipeline.js';
 
 dotenv.config();
 
@@ -47,6 +47,8 @@ app.get('/api/health', (_req, res) => {
       aiPatches: Boolean(process.env.LLM_API_KEY || process.env.DASHSCOPE_API_KEY),
       llmModel: process.env.LLM_MODEL || 'qwen-plus (default)',
       llmProvider: process.env.LLM_BASE_URL ? 'custom (LLM_BASE_URL)' : 'dashscope (default)',
+      workflows: Boolean(process.env.RENDER_API_KEY && process.env.RENDER_WORKFLOW_TASK),
+      workflowTask: process.env.RENDER_WORKFLOW_TASK || null,
     },
   });
 });
@@ -126,9 +128,120 @@ app.get('/api/scan', async (req, res) => {
   }
 });
 
+// ----------------------------------------------------------------
+// Render Workflows support (optional) — "Best Use of Render" path.
+//
+// The scan pipeline also runs as a managed Render Workflow task
+// (workflow/index.js + scripts/workflow-run.js). When RENDER_API_KEY and
+// RENDER_WORKFLOW_TASK are set, clients can POST /api/scan/workflow to kick
+// off a workflow run instead of streaming in-process, then poll its status.
+// ----------------------------------------------------------------
+const RENDER_API_BASE = 'https://api.render.com/v1';
+const RENDER_API_KEY = process.env.RENDER_API_KEY || '';
+const RENDER_WORKFLOW_TASK = process.env.RENDER_WORKFLOW_TASK || ''; // e.g. patch-scan/scan_repo
+
+async function renderApi(path, options = {}) {
+  const res = await fetch(`${RENDER_API_BASE}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${RENDER_API_KEY}`,
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+  });
+  const body = await res.json().catch(() => ({}));
+  return { status: res.status, body };
+}
+
+/**
+ * POST /api/scan/workflow — start a scan as a Render Workflow task run.
+ * Body: { url }
+ * Response: { taskRunId, task, status }
+ * The run executes on its own Render instance; poll with GET below.
+ */
+app.post('/api/scan/workflow', async (req, res) => {
+  if (!RENDER_API_KEY || !RENDER_WORKFLOW_TASK) {
+    return res.status(503).json({
+      error: 'Render Workflows not configured — set RENDER_API_KEY and RENDER_WORKFLOW_TASK',
+    });
+  }
+  const url = req.body && req.body.url;
+  if (typeof url !== 'string' || !url.trim()) {
+    return res.status(400).json({ error: 'Missing required body field: url' });
+  }
+  try {
+    validateRepoUrl(url);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+  try {
+    const { status, body } = await renderApi('/task-runs', {
+      method: 'POST',
+      body: JSON.stringify({ task: RENDER_WORKFLOW_TASK, input: [url.trim()] }),
+    });
+    if (status !== 201 && status !== 200) {
+      return res.status(502).json({ error: `Render API ${status}: ${JSON.stringify(body).slice(0, 300)}` });
+    }
+    const taskRunId = body.taskRunId || body.id;
+    if (!taskRunId) {
+      return res.status(502).json({ error: `Render API returned no run id: ${JSON.stringify(body).slice(0, 300)}` });
+    }
+    res.json({ taskRunId, task: RENDER_WORKFLOW_TASK, status: body.status || 'pending' });
+  } catch (err) {
+    res.status(502).json({ error: `Render API unreachable: ${err.message}` });
+  }
+});
+
+/**
+ * GET /api/scan/workflow/:taskRunId — poll a workflow run.
+ * Response: { taskRunId, status, results?, error? }
+ * status: pending | running | completed | failed | canceled
+ * When completed, results is the full scan report and the run is recorded
+ * into scan history so it appears on the dashboard.
+ */
+app.get('/api/scan/workflow/:taskRunId', async (req, res) => {
+  if (!RENDER_API_KEY || !RENDER_WORKFLOW_TASK) {
+    return res.status(503).json({ error: 'Render Workflows not configured' });
+  }
+  try {
+    const { status, body } = await renderApi(`/task-runs/${req.params.taskRunId}`);
+    if (status !== 200) {
+      return res.status(502).json({ error: `Render API ${status}: ${JSON.stringify(body).slice(0, 300)}` });
+    }
+    const results = Array.isArray(body.results) ? body.results[0] : null;
+    if (body.status === 'completed' && results && !scanDetails.has(`wf-${req.params.taskRunId}`)) {
+      recordScan(
+        {
+          id: `wf-${req.params.taskRunId}`,
+          repo: (Array.isArray(body.input) ? body.input[0] : null) || results.meta?.repo || 'workflow',
+          date: body.completedAt || new Date().toISOString(),
+          status: 'completed',
+          summary: {
+            totalFindings: results.summary?.totalFindings ?? 0,
+            bySeverity: results.summary?.bySeverity ?? {},
+            secrets: results.summary?.secrets ?? 0,
+            injection: results.summary?.injection ?? 0,
+            dependencies: results.summary?.dependencies ?? 0,
+          },
+        },
+        results
+      );
+    }
+    res.json({
+      taskRunId: req.params.taskRunId,
+      status: body.status,
+      results: body.status === 'completed' ? results : undefined,
+      error: body.error || undefined,
+    });
+  } catch (err) {
+    res.status(502).json({ error: `Render API unreachable: ${err.message}` });
+  }
+});
+
 const port = Number(process.env.PORT) || 4000;
 app.listen(port, () => {
   console.log(`PATCH backend listening on http://localhost:${port}`);
   console.log(`  CVE lookup:   ${process.env.TAVILY_API_KEY ? 'ON (Tavily)' : 'OFF — set TAVILY_API_KEY'}`);
   console.log(`  AI patches:   ${process.env.LLM_API_KEY || process.env.DASHSCOPE_API_KEY ? 'ON' : 'OFF (deterministic fallback) — set LLM_API_KEY or DASHSCOPE_API_KEY'}`);
+  console.log(`  Workflows:    ${RENDER_API_KEY && RENDER_WORKFLOW_TASK ? `ON (${RENDER_WORKFLOW_TASK})` : 'OFF — set RENDER_API_KEY + RENDER_WORKFLOW_TASK'}`);
 });
