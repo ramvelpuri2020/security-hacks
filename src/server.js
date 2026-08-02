@@ -10,6 +10,21 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// In-memory scan history (demo scope — resets on deploy/restart).
+// Recorded on every completed/failed scan and served via GET /api/history
+// so the dashboard can render real data instead of mock rows.
+const scanHistory = [];
+const MAX_HISTORY = 20;
+
+function recordScan(entry) {
+  scanHistory.unshift(entry);
+  if (scanHistory.length > MAX_HISTORY) scanHistory.pop();
+}
+
+app.get('/api/history', (_req, res) => {
+  res.json({ scans: scanHistory });
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
@@ -53,6 +68,31 @@ app.get('/api/scan', async (req, res) => {
   const emit = (type, data) => {
     if (aborted.current) return;
     res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+    if (type === 'done' && data?.results) {
+      const r = data.results;
+      recordScan({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        repo: r.meta?.repo || url || 'unknown',
+        date: new Date().toISOString(),
+        status: 'completed',
+        summary: {
+          totalFindings: r.summary?.totalFindings ?? 0,
+          bySeverity: r.summary?.bySeverity ?? {},
+          secrets: r.summary?.secrets ?? 0,
+          injection: r.summary?.injection ?? 0,
+          dependencies: r.summary?.dependencies ?? 0,
+        },
+      });
+    } else if (type === 'error' && typeof url === 'string' && url) {
+      // Only record real scan failures — skip the missing-param validation error.
+      recordScan({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        repo: url,
+        date: new Date().toISOString(),
+        status: 'failed',
+        error: String(data?.message || 'unknown error').slice(0, 200),
+      });
+    }
   };
 
   emit('start', { url: url || null, ts: Date.now() });

@@ -3,14 +3,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { PipelineStepper, type PipelineStage } from './pipeline-stepper'
 import type { Finding } from './results-screen'
+import { API_BASE } from '@/lib/api'
 
 interface PipelineDisplayProps {
   repoUrl: string
   onComplete: (findings: Finding[]) => void
 }
-
-// Backend base URL — override with NEXT_PUBLIC_API_BASE (e.g. your Render URL in prod).
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:4000'
 
 // Map a backend finding to the Finding type used by the results screen.
 function toFinding(raw: any): Finding {

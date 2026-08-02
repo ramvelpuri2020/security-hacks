@@ -29,8 +29,9 @@ export default function Page() {
     setCurrentScreen('results')
   }
 
-  const handleBackToInput = () => {
-    setCurrentScreen('input')
+  const handleBackToHome = () => {
+    // Land back on the dashboard so the just-finished scan appears in Recent Scans.
+    setCurrentScreen('home')
     setRepoUrl('')
     setFindings([])
   }
@@ -40,7 +41,7 @@ export default function Page() {
       {currentScreen === 'home' && <DashboardHome onNewScan={handleNewScan} />}
       {currentScreen === 'input' && <InputScreen onScan={handleScan} isLoading={false} />}
       {currentScreen === 'pipeline' && <PipelineDisplay repoUrl={repoUrl} onComplete={handlePipelineComplete} />}
-      {currentScreen === 'results' && <ResultsScreen findings={findings} onBackToInput={handleBackToInput} />}
+      {currentScreen === 'results' && <ResultsScreen findings={findings} onBackToInput={handleBackToHome} />}
     </main>
   )
 }

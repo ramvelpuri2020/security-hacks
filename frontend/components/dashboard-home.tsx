@@ -1,54 +1,84 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { BarChart3, Shield, AlertOctagon, TrendingUp, ArrowRight, GitBranch, Plus } from 'lucide-react'
+import { BarChart3, Shield, AlertOctagon, TrendingUp, ArrowRight, GitBranch, Plus, Boxes, XCircle } from 'lucide-react'
+import { API_BASE } from '@/lib/api'
 
-interface ScanResult {
+interface ScanSummary {
   id: string
   repo: string
   date: string
-  findings: {
-    critical: number
-    high: number
-    medium: number
-    low: number
+  status: 'completed' | 'failed'
+  error?: string
+  summary?: {
+    totalFindings: number
+    bySeverity: Record<string, number>
+    secrets: number
+    injection: number
+    dependencies: number
   }
-  status: 'completed' | 'running' | 'failed'
 }
 
-const recentScans: ScanResult[] = [
-  {
-    id: '1',
-    repo: 'vercel/next.js',
-    date: '2 hours ago',
-    findings: { critical: 1, high: 2, medium: 3, low: 2 },
-    status: 'completed',
-  },
-  {
-    id: '2',
-    repo: 'facebook/react',
-    date: '1 day ago',
-    findings: { critical: 0, high: 1, medium: 4, low: 3 },
-    status: 'completed',
-  },
-  {
-    id: '3',
-    repo: 'torvalds/linux',
-    date: '3 days ago',
-    findings: { critical: 2, high: 5, medium: 8, low: 12 },
-    status: 'completed',
-  },
-]
+interface HistoryResponse {
+  scans: ScanSummary[]
+}
+
+function timeAgo(iso: string): string {
+  const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
+  if (seconds < 60) return 'just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  const days = Math.floor(hours / 24)
+  return `${days} day${days === 1 ? '' : 's'} ago`
+}
+
+function shortRepo(url: string): string {
+  return url.replace(/^https?:\/\/(www\.)?(github\.com|gitlab\.com|bitbucket\.org)\//, '').replace(/\/$/, '')
+}
 
 export function DashboardHome({ onNewScan }: { onNewScan: () => void }) {
-  const totalScans = recentScans.length
-  const totalFindings = recentScans.reduce((acc, scan) => {
-    return acc + scan.findings.critical + scan.findings.high + scan.findings.medium + scan.findings.low
-  }, 0)
+  const [scans, setScans] = useState<ScanSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const criticalFindings = recentScans.reduce((acc, scan) => acc + scan.findings.critical, 0)
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${API_BASE}/api/history`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.json() as Promise<HistoryResponse>
+      })
+      .then((data) => {
+        if (!cancelled) setScans(data.scans || [])
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'failed to load scan history')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const completed = scans.filter((s) => s.status === 'completed')
+  const totalScans = scans.length
+  const totalFindings = completed.reduce((acc, s) => acc + (s.summary?.totalFindings ?? 0), 0)
+  const criticalFindings = completed.reduce((acc, s) => acc + (s.summary?.bySeverity?.critical ?? 0), 0)
+  const totalDependencies = completed.reduce((acc, s) => acc + (s.summary?.dependencies ?? 0), 0)
+
+  const stats = [
+    { label: 'Total Scans', value: totalScans, sub: 'repositories analyzed', tone: 'text-green-500' },
+    { label: 'Total Findings', value: totalFindings, sub: 'issues detected', tone: 'text-orange-500' },
+    { label: 'Critical Issues', value: criticalFindings, sub: 'require attention', tone: 'text-primary' },
+    { label: 'Dependencies Scanned', value: totalDependencies, sub: 'across all repos', tone: 'text-green-500' },
+  ]
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-black to-neutral-900/50">
@@ -75,56 +105,21 @@ export function DashboardHome({ onNewScan }: { onNewScan: () => void }) {
       <div className="max-w-7xl mx-auto px-6 py-12">
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-12">
-          <Card className="glass-card border-white/8 bg-white/3">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Scans</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold">{totalScans}</span>
-                <span className="text-xs text-green-500 flex items-center gap-1">
-                  <TrendingUp className="w-3 h-3" />
-                  +2 this week
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-card border-white/8 bg-white/3">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Findings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold">{totalFindings}</span>
-                <span className="text-xs text-orange-500">Issues detected</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-card border-white/8 bg-white/3">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Critical Issues</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-primary">{criticalFindings}</span>
-                <span className="text-xs text-red-500">Require attention</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-card border-white/8 bg-white/3">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Avg Fix Time</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold">2.3h</span>
-                <span className="text-xs text-green-500">per issue</span>
-              </div>
-            </CardContent>
-          </Card>
+          {stats.map((stat) => (
+            <Card key={stat.label} className="glass-card border-white/8 bg-white/3">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground">{stat.label}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold">
+                    {loading ? <span className="animate-pulse text-muted-foreground">—</span> : stat.value}
+                  </span>
+                  <span className={`text-xs ${stat.tone}`}>{stat.sub}</span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         {/* Recent Scans */}
@@ -133,47 +128,79 @@ export function DashboardHome({ onNewScan }: { onNewScan: () => void }) {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Recent Scans</CardTitle>
-                <CardDescription>Your last scanning activity</CardDescription>
+                <CardDescription>Your scanning activity — live from the backend</CardDescription>
               </div>
               <BarChart3 className="w-5 h-5 text-muted-foreground" />
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="divide-y divide-white/8">
-              {recentScans.map((scan, idx) => (
-                <div
-                  key={scan.id}
-                  className="p-4 hover:bg-white/5 transition-colors cursor-pointer group"
-                  style={{ animationDelay: `${idx * 50}ms` }}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <GitBranch className="w-4 h-4 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium text-sm">{scan.repo}</p>
-                        <p className="text-xs text-muted-foreground">{scan.date}</p>
+            {loading ? (
+              <div className="p-8 text-center text-sm text-muted-foreground animate-pulse">Loading scan history…</div>
+            ) : error ? (
+              <div className="p-8 text-center">
+                <XCircle className="w-8 h-8 text-red-400 mx-auto mb-3" />
+                <p className="text-sm text-red-400">Could not reach the scan service ({error})</p>
+                <p className="text-xs text-muted-foreground mt-1">Make sure the backend is running and NEXT_PUBLIC_API_BASE points at it.</p>
+              </div>
+            ) : scans.length === 0 ? (
+              <div className="p-12 text-center">
+                <Boxes className="w-10 h-10 text-muted-foreground/40 mx-auto mb-4" />
+                <p className="font-medium text-muted-foreground">No scans yet</p>
+                <p className="text-sm text-muted-foreground/70 mt-1 mb-6">Run your first scan to see real results here.</p>
+                <Button onClick={onNewScan} className="gap-2">
+                  <Plus className="w-4 h-4" />
+                  Run your first scan
+                </Button>
+              </div>
+            ) : (
+              <div className="divide-y divide-white/8">
+                {scans.map((scan, idx) => (
+                  <div
+                    key={scan.id}
+                    className="p-4 hover:bg-white/5 transition-colors cursor-pointer group"
+                    style={{ animationDelay: `${idx * 50}ms` }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4 flex-1">
+                        <GitBranch className="w-4 h-4 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium text-sm">{shortRepo(scan.repo)}</p>
+                          <p className="text-xs text-muted-foreground">{timeAgo(scan.date)}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        {scan.status === 'failed' ? (
+                          <Badge variant="secondary" className="bg-red-500/10 text-red-400 border-red-500/20">
+                            Failed
+                          </Badge>
+                        ) : (
+                          <>
+                            {(scan.summary?.bySeverity?.critical ?? 0) > 0 && (
+                              <Badge variant="destructive" className="bg-red-500/10 text-red-400 border-red-500/20">
+                                {scan.summary?.bySeverity?.critical} Critical
+                              </Badge>
+                            )}
+                            {(scan.summary?.bySeverity?.high ?? 0) > 0 && (
+                              <Badge variant="secondary" className="bg-orange-500/10 text-orange-400 border-orange-500/20">
+                                {scan.summary?.bySeverity?.high} High
+                              </Badge>
+                            )}
+                            <span className="text-xs text-muted-foreground">
+                              {scan.summary?.bySeverity?.medium ?? 0} med
+                            </span>
+                          </>
+                        )}
+                        <ArrowRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-3">
-                      {scan.findings.critical > 0 && (
-                        <Badge variant="destructive" className="bg-red-500/10 text-red-400 border-red-500/20">
-                          {scan.findings.critical} Critical
-                        </Badge>
-                      )}
-                      {scan.findings.high > 0 && (
-                        <Badge variant="secondary" className="bg-orange-500/10 text-orange-400 border-orange-500/20">
-                          {scan.findings.high} High
-                        </Badge>
-                      )}
-                      <span className="text-xs text-muted-foreground">{scan.findings.medium} med</span>
-
-                      <ArrowRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
+                    {scan.status === 'failed' && scan.error && (
+                      <p className="text-xs text-red-400/70 mt-2 font-mono">{scan.error}</p>
+                    )}
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

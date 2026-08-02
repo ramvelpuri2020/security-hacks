@@ -11,7 +11,8 @@ interface InputScreenProps {
 }
 
 export function InputScreen({ onScan, isLoading = false }: InputScreenProps) {
-  const [repoUrl, setRepoUrl] = useState('https://github.com/vercel/next.js')
+  // Default to the demo repo so a fresh run always finds real vulnerabilities.
+  const [repoUrl, setRepoUrl] = useState('https://github.com/ramvelpuri2020/security-hacks')
   const [error, setError] = useState('')
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -113,7 +114,7 @@ export function InputScreen({ onScan, isLoading = false }: InputScreenProps) {
           <div className="pt-4 border-t border-white/8">
             <p className="text-xs text-muted-foreground mb-3">Example repositories:</p>
             <div className="grid grid-cols-2 gap-2">
-              {['https://github.com/vercel/next.js', 'https://github.com/facebook/react'].map((url) => (
+              {['https://github.com/ramvelpuri2020/security-hacks', 'https://github.com/octocat/Hello-World'].map((url) => (
                 <button
                   key={url}
                   onClick={() => {
